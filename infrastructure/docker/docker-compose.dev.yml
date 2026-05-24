@@ -13,6 +13,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      # Schéma déclaratif appliqué au premier démarrage (volume vide).
+      # En prod, ce sont les migrations Atlas qui font foi — ce mount est
+      # une commodité de dev pour avoir une base prête à l'usage sans
+      # commande supplémentaire.
+      - ../db/schema.sql:/docker-entrypoint-initdb.d/00-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-claudemaison} -d ${POSTGRES_DB:-claudemaison}"]
       interval: 5s
