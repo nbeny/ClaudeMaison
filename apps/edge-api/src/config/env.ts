@@ -15,6 +15,9 @@ const EnvSchema = z.object({
   JWT_ISSUER: z.string().min(1),
   JWT_AUDIENCE: z.string().min(1),
   JWT_SIGNING_KEY: z.string().min(32),
+  // Durées en secondes. Access court (15 min), refresh long (30 j).
+  JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 24 * 30),
 
   ALLOWED_ORIGINS: z
     .string()

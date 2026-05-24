@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 import { loadEnv } from './config/env';
+import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
@@ -37,6 +38,7 @@ import { HealthModule } from './modules/health/health.module';
         },
       },
     }),
+    DatabaseModule,
     HealthModule,
     GatewayModule,
     AuthModule,
