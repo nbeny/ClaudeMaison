@@ -141,7 +141,7 @@ Toutes les variables d'environnement sont **validées au boot** par un schéma Z
 | 0 | Spec écrite | **fait (ce commit)** |
 | 1 | Squelette NestJS bootable, `/health`, `/graphql` (avec `viewer` placeholder), Dockerfile, docker-compose dev (Postgres + Redis) | **fait (commit suivant)** |
 | 2 | Module `auth` : inscription/connexion locales, JWT, schéma SQL initial, migrations Atlas | **fait** |
-| 3 | Module `auth` : OIDC Authorization Code Flow + Keycloak self-hosted en compose | à venir |
+| 3 | Module `auth` : OIDC Authorization Code Flow + Keycloak self-hosted en compose | **fait** |
 | 4 | Module `billing` : plans, quotas, `usage_events`, intégration gRPC pour écriture depuis `ai-core` | à venir |
 | 5 | Observabilité OTel complète + dashboards Grafana | à venir |
 | 6 | Tests d'intégration Testcontainers + CI pipeline | à venir |

@@ -24,9 +24,38 @@ const EnvSchema = z.object({
     .default('http://localhost:3001')
     .transform((s) => s.split(',').map((o) => o.trim()).filter(Boolean)),
 
+  // OIDC (étape 3). Optionnel : si OIDC_ISSUER_URL est absent, le module OIDC
+  // ne s'enregistre pas et seul l'auth local fonctionne. Sinon, tout le bloc
+  // est requis.
+  OIDC_ISSUER_URL: z.string().url().optional(),
+  OIDC_CLIENT_ID: z.string().min(1).optional(),
+  OIDC_CLIENT_SECRET: z.string().min(1).optional(),
+  OIDC_REDIRECT_URI: z.string().url().optional(),
+  // URL du web client où rediriger après login OIDC réussi (tokens en fragment).
+  OIDC_POST_LOGIN_REDIRECT: z.string().url().optional(),
+
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
 
   GIT_COMMIT: z.string().optional(),
+}).superRefine((env, ctx) => {
+  // OIDC : tout-ou-rien. Si l'une des vars est fournie, toutes le doivent.
+  const oidcKeys = [
+    'OIDC_ISSUER_URL',
+    'OIDC_CLIENT_ID',
+    'OIDC_CLIENT_SECRET',
+    'OIDC_REDIRECT_URI',
+  ] as const;
+  const present = oidcKeys.filter((k) => env[k] !== undefined);
+  if (present.length > 0 && present.length < oidcKeys.length) {
+    const missing = oidcKeys.filter((k) => env[k] === undefined);
+    for (const k of missing) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [k],
+        message: `OIDC partiellement configuré : ${k} est requis quand les autres OIDC_* sont fournis.`,
+      });
+    }
+  }
 });
 
 export type Env = z.infer<typeof EnvSchema>;

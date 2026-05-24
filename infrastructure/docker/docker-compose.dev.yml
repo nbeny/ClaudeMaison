@@ -82,9 +82,44 @@ services:
       timeout: 5s
       retries: 5
 
+  # Identity Provider OIDC pour l'étape 3 du module auth.
+  # Opt-in via `--profile oidc` : Keycloak coûte ~500 Mo RAM et ~20s au boot,
+  # inutile pour les développeurs qui ne touchent pas au flux OIDC.
+  # Le realm `claudemaison-dev` est importé au premier démarrage avec le client
+  # `edge-api` (PKCE S256) et deux users seedés (alice/bob).
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: cm-keycloak
+    restart: unless-stopped
+    profiles: ["oidc", "full"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+    command: ["start-dev", "--import-realm"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/realm-claudemaison-dev.json:/opt/keycloak/data/import/realm.json:ro
+      - keycloak-data:/opt/keycloak/data
+    healthcheck:
+      # Keycloak 26 expose /health/ready sur le port management 9000, mais ce
+      # port n'est pas activé en start-dev. On vérifie donc l'endpoint OIDC
+      # discovery sur 8080 (présent dès que le realm est importé).
+      test:
+        - "CMD-SHELL"
+        - "exec 3<>/dev/tcp/localhost/8080 && printf 'GET /realms/claudemaison-dev/.well-known/openid-configuration HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q 'issuer' <&3"
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
 volumes:
   postgres-data:
   redis-data:
   qdrant-data:
   nats-data:
   minio-data:
+  keycloak-data:

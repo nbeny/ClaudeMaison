@@ -80,3 +80,24 @@ CREATE UNIQUE INDEX sessions_refresh_hash_idx ON auth.sessions (refresh_token_ha
 CREATE INDEX sessions_user_active_idx
     ON auth.sessions (user_id)
     WHERE revoked_at IS NULL;
+
+-- ---------------------------------------------------------------------------
+-- auth.federated_identities
+-- Liens entre un user local et son identité chez un provider OIDC externe.
+-- Un user peut avoir plusieurs identités (Keycloak, Google enterprise, …) ;
+-- une identité (provider, subject) est unique et ne peut pointer qu'à un user.
+-- ---------------------------------------------------------------------------
+CREATE TABLE auth.federated_identities (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    provider    TEXT NOT NULL,         -- ex: 'keycloak', 'google', 'github'
+    subject     TEXT NOT NULL,         -- claim `sub` du provider, stable
+    email       CITEXT,                -- email rapporté par le provider au lien
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_login  TIMESTAMPTZ
+);
+
+CREATE UNIQUE INDEX federated_identities_provider_subject_idx
+    ON auth.federated_identities (provider, subject);
+CREATE INDEX federated_identities_user_idx
+    ON auth.federated_identities (user_id);

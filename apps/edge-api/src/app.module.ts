@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
-import { loadEnv } from './config/env';
+import { loadEnv, type Env } from './config/env';
 import { DatabaseModule } from './database/database.module';
+import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { OidcModule } from './modules/auth/oidc/oidc.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
 import { HealthModule } from './modules/health/health.module';
@@ -39,9 +41,14 @@ import { HealthModule } from './modules/health/health.module';
       },
     }),
     DatabaseModule,
+    RedisModule,
     HealthModule,
     GatewayModule,
     AuthModule,
+    // Module OIDC conditionnel : forRoot lit l'env directement pour décider
+    // de l'enregistrement. L'env a déjà été validé par ConfigModule au-dessus
+    // (même schema Zod), donc loadEnv ici ne fait que re-parser sans I/O.
+    OidcModule.forRoot(new ConfigService<Env, true>(loadEnv(process.env))),
     BillingModule,
   ],
 })

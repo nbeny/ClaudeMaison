@@ -3,6 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import postgres, { type Sql } from 'postgres';
 import type { Env } from '../config/env';
 
+/**
+ * Type acceptant le pool principal OU une transaction. Les repositories
+ * prennent un `SqlConn` optionnel pour permettre à un appelant d'enrôler
+ * plusieurs opérations dans la même transaction via `db.sql.begin(...)`.
+ */
+export type SqlConn = Sql | postgres.TransactionSql;
+
 @Injectable()
 export class DatabaseService implements OnModuleDestroy {
   readonly sql: Sql;

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthResolver } from './auth.resolver';
 import { AuthService } from './auth.service';
+import { FederatedIdentitiesRepository } from './federated-identities.repository';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtService } from './jwt.service';
 import { PasswordService } from './password.service';
@@ -16,7 +17,8 @@ import { UsersRepository } from './users.repository';
     PasswordService,
     UsersRepository,
     SessionsRepository,
+    FederatedIdentitiesRepository,
   ],
-  exports: [JwtService, JwtAuthGuard],
+  exports: [AuthService, JwtService, JwtAuthGuard],
 })
 export class AuthModule {}

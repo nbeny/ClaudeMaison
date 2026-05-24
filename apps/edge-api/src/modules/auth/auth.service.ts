@@ -7,6 +7,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { randomBytes, createHash } from 'node:crypto';
 import type { Env } from '../../config/env';
+import { DatabaseService } from '../../database/database.service';
+import { FederatedIdentitiesRepository } from './federated-identities.repository';
 import { JwtService } from './jwt.service';
 import { DUMMY_HASH, PasswordService } from './password.service';
 import { SessionsRepository } from './sessions.repository';
@@ -38,6 +40,8 @@ export class AuthService {
     private readonly sessions: SessionsRepository,
     private readonly passwords: PasswordService,
     private readonly jwt: JwtService,
+    private readonly db: DatabaseService,
+    private readonly federatedIdentities: FederatedIdentitiesRepository,
   ) {
     this.accessTtlSeconds = config.get('JWT_ACCESS_TTL_SECONDS', { infer: true });
     this.refreshTtlSeconds = config.get('JWT_REFRESH_TTL_SECONDS', { infer: true });
@@ -119,6 +123,78 @@ export class AuthService {
     if (session && !session.revokedAt) {
       await this.sessions.revoke(session.id);
     }
+  }
+
+  /**
+   * Connecte un utilisateur via une identité OIDC vérifiée. Trois cas :
+   *
+   *  - identité (provider, subject) déjà connue → on récupère l'user, on
+   *    touche `last_login`, on émet les tokens.
+   *  - identité inconnue mais email déjà chez nous (compte local existant)
+   *    → on lie l'identité fédérée à l'user existant. C'est l'auto-merge
+   *    classique des IdP qui valident les emails.
+   *  - email inconnu → on crée un user sans password_hash + on attache
+   *    l'identité fédérée. L'user pourra définir un mot de passe plus tard
+   *    via un flow "set password" (non implémenté Jour-1).
+   *
+   * Tout est wrappé dans une transaction : la création du user et celle de
+   * l'identité fédérée ne peuvent pas se désynchroniser, et le UNIQUE
+   * (provider, subject) protège contre une course concurrente entre deux
+   * callbacks pour le même user.
+   */
+  async signinWithOidc(
+    input: { provider: string; subject: string; email: string },
+    ctx: RequestContext = {},
+  ): Promise<IssuedTokens> {
+    const user = await this.db.sql.begin(async (tx) => {
+      const existing = await this.federatedIdentities.findByProviderSubject(
+        input.provider,
+        input.subject,
+        tx,
+      );
+      if (existing) {
+        const linked = await this.users.findActiveById(existing.userId, tx);
+        if (!linked) {
+          throw new UnauthorizedException(
+            'Identité fédérée orpheline (user supprimé) — contactez le support.',
+          );
+        }
+        await this.federatedIdentities.touchLastLogin(existing.id, tx);
+        return linked;
+      }
+
+      const byEmail = await this.users.findActiveByEmail(input.email, tx);
+      if (byEmail) {
+        await this.federatedIdentities.create(
+          {
+            userId: byEmail.id,
+            provider: input.provider,
+            subject: input.subject,
+            email: input.email,
+          },
+          tx,
+        );
+        this.logger.log(
+          `OIDC: identité ${input.provider}:${input.subject} liée au user existant ${byEmail.id}.`,
+        );
+        return byEmail;
+      }
+
+      const created = await this.users.createPasswordless({ email: input.email }, tx);
+      await this.federatedIdentities.create(
+        {
+          userId: created.id,
+          provider: input.provider,
+          subject: input.subject,
+          email: input.email,
+        },
+        tx,
+      );
+      this.logger.log(`OIDC: nouveau user ${created.id} créé via ${input.provider}.`);
+      return created;
+    });
+
+    return this.issueTokens(user as UserRow, ctx);
   }
 
   private async issueTokens(user: UserRow, ctx: RequestContext): Promise<IssuedTokens> {
