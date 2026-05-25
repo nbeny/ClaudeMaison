@@ -1,0 +1,45 @@
+name: Smoke E2E
+
+# Boot le stack complet (compose profil apps) et vérifie chaque /health.
+# Pas exécuté sur chaque PR : build de 7 images = ~10-15 min cache à froid.
+# Triggers :
+# - push sur main (gate avant déploiement éventuel)
+# - manuel (workflow_dispatch) pour valider une PR à la demande
+# - nightly pour détecter les régressions dues aux base images / deps
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/**"
+      - "infrastructure/docker/**"
+      - "scripts/smoke.sh"
+      - ".github/workflows/smoke.yml"
+  workflow_dispatch:
+  schedule:
+    # 04:00 UTC ≈ 05:00 Paris hiver, 06:00 été. Heure creuse runners.
+    - cron: "0 4 * * *"
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  smoke:
+    name: docker compose --profile apps up
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Réutilise le cache GHA scopé par binaire écrit par supply-chain.yml :
+      # les images sont déjà build sur main, on hit le cache sans rebuild.
+      # `docker compose build` lit buildkit cache via env BUILDX_BAKE_CACHE.
+      - name: Run smoke
+        run: bash scripts/smoke.sh
+        env:
+          DOCKER_BUILDKIT: "1"
+          COMPOSE_DOCKER_CLI_BUILD: "1"
