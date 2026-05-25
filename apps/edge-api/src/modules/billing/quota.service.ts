@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { MetricsService } from '../../observability/metrics.service';
 import type { UsageKind } from './kinds';
 import { planQuotaFor, type PlanRow, PlansRepository } from './plans.repository';
 import {
@@ -33,6 +34,7 @@ export class QuotaService {
     private readonly plans: PlansRepository,
     private readonly subscriptions: SubscriptionsRepository,
     private readonly usage: UsageEventsRepository,
+    private readonly metrics: MetricsService,
   ) {}
 
   /**
@@ -69,6 +71,15 @@ export class QuotaService {
   }
 
   async check(workspaceId: string, kind: UsageKind): Promise<QuotaStatus> {
+    const status = await this.computeStatus(workspaceId, kind);
+    this.metrics.recordQuotaCheck(kind, status.allowed);
+    return status;
+  }
+
+  private async computeStatus(
+    workspaceId: string,
+    kind: UsageKind,
+  ): Promise<QuotaStatus> {
     const eff = await this.resolveSubscription(workspaceId);
     const limit = planQuotaFor(eff.plan, kind);
 

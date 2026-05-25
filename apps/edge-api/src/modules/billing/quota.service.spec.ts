@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { MetricsService } from '../../observability/metrics.service';
 import { currentCalendarMonth, QuotaService } from './quota.service';
 import type { PlanRow, PlansRepository } from './plans.repository';
 import type {
@@ -45,8 +46,13 @@ function makeService(opts: {
   plansById?: Record<string, PlanRow>;
   activeSub?: SubscriptionRow | null;
   used?: number;
-}): { svc: QuotaService; usageSpy: ReturnType<typeof vi.fn> } {
+}): {
+  svc: QuotaService;
+  usageSpy: ReturnType<typeof vi.fn>;
+  metricsSpy: ReturnType<typeof vi.fn>;
+} {
   const usageSpy = vi.fn().mockResolvedValue(opts.used ?? 0);
+  const metricsSpy = vi.fn();
   const plans: Partial<PlansRepository> = {
     findBySlug: vi.fn(async (slug: string) => opts.plansBySlug?.[slug] ?? null),
     findById: vi.fn(async (id: string) => opts.plansById?.[id] ?? null),
@@ -57,13 +63,18 @@ function makeService(opts: {
   const usage: Partial<UsageEventsRepository> = {
     sumQuantity: usageSpy,
   };
+  const metrics: Partial<MetricsService> = {
+    recordQuotaCheck: metricsSpy,
+  };
   return {
     svc: new QuotaService(
       plans as PlansRepository,
       subs as SubscriptionsRepository,
       usage as UsageEventsRepository,
+      metrics as MetricsService,
     ),
     usageSpy,
+    metricsSpy,
   };
 }
 
@@ -167,6 +178,19 @@ describe('QuotaService', () => {
     expect(status.allowed).toBe(false);
     expect(status.limit).toBe(0);
     expect(status.remaining).toBe(0);
+  });
+
+  it('incrémente la métrique recordQuotaCheck avec kind et allowed', async () => {
+    const plan = makePlan({ quotaLlmTokens: 100 });
+    const sub = makeSub({ planId: plan.id });
+    const { svc, metricsSpy } = makeService({
+      plansById: { [plan.id]: plan },
+      activeSub: sub,
+      used: 100,
+    });
+
+    await svc.check('ws-1', 'llm_tokens');
+    expect(metricsSpy).toHaveBeenCalledWith('llm_tokens', false);
   });
 
   it('échoue explicitement si le plan free est manquant en base', async () => {

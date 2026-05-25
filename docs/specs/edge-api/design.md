@@ -145,10 +145,23 @@ Toutes les variables d'environnement sont **validées au boot** par un schéma Z
 
 ## 8. Observabilité
 
-- OpenTelemetry SDK (`@opentelemetry/sdk-node`) initialisé avant Nest.
-- Instrumentation auto : HTTP, GraphQL, ioredis, pg.
-- Métriques custom : `http_request_duration_seconds`, `graphql_request_duration_seconds`, `auth_attempts_total`, `billing_quota_check_total`.
-- `/ready` vérifie Postgres (`SELECT 1`) + Redis (`PING`) via `@nestjs/terminus`.
+### 8.1 Côté binaire (étape 5a)
+
+- SDK : `@opentelemetry/sdk-node` initialisé dans `src/telemetry.ts` **avant** tout autre import applicatif (sinon les instrumentations qui patchent au `require` ne voient pas le code). Bootstrap conditionné à `OTEL_EXPORTER_OTLP_ENDPOINT` : sans endpoint, l'API `@opentelemetry/api` renvoie des handles no-op et le binaire reste utilisable en dev local sans collector.
+- Exporters : OTLP-proto pour traces (`/v1/traces`) et métriques (`/v1/metrics`, push toutes les 15 s). Pas de Prometheus pull : on ne veut qu'un seul protocole sortant.
+- Instrumentations sélectionnées explicitement (pas d'`auto-instrumentations-node`, on évite de patcher des modules qu'on n'utilise pas) : `http`, `fastify`, `graphql`, `grpc`, `ioredis`, `pg`, `nestjs-core`.
+- Façade `MetricsService` (module `@Global`) au-dessus de `metrics.getMeter('edge-api')`. Counters custom Jour-1 :
+  - `auth_attempts_total{kind, result}` — `kind ∈ {signup, signin, refresh, logout, oidc}`, `result ∈ {success, failure}`.
+  - `billing_quota_check_total{kind, allowed}` — incrémenté à chaque `QuotaService.check`.
+  - `billing_usage_events_recorded_total{result}` — `result ∈ {accepted, duplicate}`.
+- Resource attrs : `service.name=edge-api`, `service.version=$GIT_COMMIT`, `deployment.environment.name=$NODE_ENV`.
+- Shutdown propre : `SIGTERM`/`SIGINT` flush le SDK avant la sortie du process.
+
+### 8.2 Stack de collecte (étape 5b — à venir)
+
+- OpenTelemetry Collector déployé côté plateforme, profil pipeline traces + metrics → Tempo + Mimir (ou Prometheus + Jaeger).
+- Dashboards Grafana versionnés dans `infrastructure/observability/grafana/` (golden signals + métriques métier ci-dessus).
+- Healthchecks `/ready` vérifient Postgres (`SELECT 1`) + Redis (`PING`) via `@nestjs/terminus`.
 
 ## 9. Stratégie de tests
 
@@ -168,7 +181,8 @@ Toutes les variables d'environnement sont **validées au boot** par un schéma Z
 | 2 | Module `auth` : inscription/connexion locales, JWT, schéma SQL initial, migrations Atlas | **fait** |
 | 3 | Module `auth` : OIDC Authorization Code Flow + Keycloak self-hosted en compose | **fait** |
 | 4 | Module `billing` : plans, quotas, `usage_events`, intégration gRPC pour écriture depuis `ai-core` | **fait** |
-| 5 | Observabilité OTel complète + dashboards Grafana | à venir |
+| 5a | OTel SDK + instrumentations sélectives + métriques custom dans le binaire | **fait** |
+| 5b | Stack de collecte : OTel Collector, backend traces/metrics, dashboards Grafana versionnés | à venir |
 | 6 | Tests d'intégration Testcontainers + CI pipeline | à venir |
 
 ## 11. Critères de "Done" pour le binaire Jour-1

@@ -9,6 +9,7 @@ import { OidcModule } from './modules/auth/oidc/oidc.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
 import { HealthModule } from './modules/health/health.module';
+import { MetricsModule } from './observability/metrics.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { HealthModule } from './modules/health/health.module';
     }),
     DatabaseModule,
     RedisModule,
+    MetricsModule,
     HealthModule,
     GatewayModule,
     AuthModule,

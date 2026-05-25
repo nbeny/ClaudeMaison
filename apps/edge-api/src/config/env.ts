@@ -34,6 +34,7 @@ const EnvSchema = z.object({
   // URL du web client où rediriger après login OIDC réussi (tokens en fragment).
   OIDC_POST_LOGIN_REDIRECT: z.string().url().optional(),
 
+  OTEL_SERVICE_NAME: z.string().min(1).default('edge-api'),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
 
   // Billing gRPC (étape 4). Le serveur gRPC ne démarre que si BILLING_GRPC_TOKEN

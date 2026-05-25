@@ -1,5 +1,11 @@
 import 'reflect-metadata';
 
+// Démarrage OTel EN PREMIER, avant tout autre import applicatif. Les
+// instrumentations doivent patcher les modules (http, pg, ioredis, …) à
+// leur première résolution.
+import { shutdownTelemetry, startTelemetry } from './telemetry';
+startTelemetry();
+
 import helmet from '@fastify/helmet';
 import cors from '@fastify/cors';
 import { NestFactory } from '@nestjs/core';
@@ -77,6 +83,14 @@ async function bootstrap(): Promise<void> {
   await app.listen({ port: env.PORT, host: '0.0.0.0' });
   // eslint-disable-next-line no-console
   console.log(`edge-api écoute sur http://0.0.0.0:${env.PORT}`);
+}
+
+// Shutdown explicite de l'SDK OTel : `enableShutdownHooks` côté Nest ne
+// l'embarque pas, on plug donc sur SIGTERM/SIGINT directement.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.once(signal, () => {
+    void shutdownTelemetry();
+  });
 }
 
 bootstrap().catch((err) => {

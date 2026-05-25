@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { MetricsService } from '../../observability/metrics.service';
 import { isUsageKind, type UsageKind } from './kinds';
 import { QuotaService, type QuotaStatus } from './quota.service';
 import {
@@ -26,6 +27,7 @@ export class BillingService {
   constructor(
     private readonly usage: UsageEventsRepository,
     private readonly quota: QuotaService,
+    private readonly metrics: MetricsService,
   ) {}
 
   async recordUsage(events: readonly RawUsageEvent[]): Promise<BatchInsertResult> {
@@ -60,6 +62,7 @@ export class BillingService {
     });
 
     const result = await this.usage.insertBatch(normalized);
+    this.metrics.recordUsageEvents(result.accepted, result.duplicates);
     this.logger.debug(
       `recordUsage: ${result.accepted} acceptés, ${result.duplicates} doublons.`,
     );

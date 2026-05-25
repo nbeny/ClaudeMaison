@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomBytes, createHash } from 'node:crypto';
 import type { Env } from '../../config/env';
 import { DatabaseService } from '../../database/database.service';
+import { MetricsService } from '../../observability/metrics.service';
 import { FederatedIdentitiesRepository } from './federated-identities.repository';
 import { JwtService } from './jwt.service';
 import { DUMMY_HASH, PasswordService } from './password.service';
@@ -42,6 +43,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly db: DatabaseService,
     private readonly federatedIdentities: FederatedIdentitiesRepository,
+    private readonly metrics: MetricsService,
   ) {
     this.accessTtlSeconds = config.get('JWT_ACCESS_TTL_SECONDS', { infer: true });
     this.refreshTtlSeconds = config.get('JWT_REFRESH_TTL_SECONDS', { infer: true });
@@ -57,6 +59,7 @@ export class AuthService {
       // ne révèle pas l'email côté message — l'attaquant peut tester par
       // énumération de toute façon, ce n'est pas un secret. Ici on choisit la
       // clarté pour le client.
+      this.metrics.recordAuthAttempt('signup', 'failure');
       throw new ConflictException('Email déjà utilisé.');
     }
     const passwordHash = await this.passwords.hash(input.password);
@@ -64,7 +67,9 @@ export class AuthService {
       email: input.email,
       passwordHash,
     });
-    return this.issueTokens(user, ctx);
+    const issued = await this.issueTokens(user, ctx);
+    this.metrics.recordAuthAttempt('signup', 'success');
+    return issued;
   }
 
   async signin(
@@ -78,15 +83,19 @@ export class AuthService {
     const okHash = user?.passwordHash ?? DUMMY_HASH;
     const passwordOk = await this.passwords.verify(okHash, input.password);
     if (!user || !user.passwordHash || !passwordOk) {
+      this.metrics.recordAuthAttempt('signin', 'failure');
       throw new UnauthorizedException('Identifiants invalides.');
     }
-    return this.issueTokens(user, ctx);
+    const issued = await this.issueTokens(user, ctx);
+    this.metrics.recordAuthAttempt('signin', 'success');
+    return issued;
   }
 
   async refresh(refreshToken: string, ctx: RequestContext = {}): Promise<IssuedTokens> {
     const hash = sha256(refreshToken);
     const session = await this.sessions.findByRefreshHash(hash);
     if (!session) {
+      this.metrics.recordAuthAttempt('refresh', 'failure');
       throw new UnauthorizedException('Refresh token invalide.');
     }
 
@@ -99,21 +108,25 @@ export class AuthService {
         );
         await this.sessions.revokeChain(session.id);
       }
+      this.metrics.recordAuthAttempt('refresh', 'failure');
       throw new UnauthorizedException('Refresh token invalide.');
     }
 
     if (session.expiresAt.getTime() < Date.now()) {
+      this.metrics.recordAuthAttempt('refresh', 'failure');
       throw new UnauthorizedException('Session expirée.');
     }
 
     const user = await this.users.findActiveById(session.userId);
     if (!user) {
+      this.metrics.recordAuthAttempt('refresh', 'failure');
       throw new UnauthorizedException('Utilisateur introuvable.');
     }
 
     // Rotation : nouvelle session, ancienne marquée comme rotated.
     const issued = await this.issueTokens(user, ctx);
     await this.sessions.markRotated(session.id, issued.sessionId);
+    this.metrics.recordAuthAttempt('refresh', 'success');
     return issued;
   }
 
@@ -123,6 +136,9 @@ export class AuthService {
     if (session && !session.revokedAt) {
       await this.sessions.revoke(session.id);
     }
+    // Toujours compté comme success : un logout idempotent qui ne trouve pas
+    // la session est un succès fonctionnel (le client est déjà déconnecté).
+    this.metrics.recordAuthAttempt('logout', 'success');
   }
 
   /**
