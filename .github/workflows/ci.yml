@@ -48,7 +48,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter edge-api type-check
+      - run: pnpm -r --filter "./apps/*" type-check
 
   unit:
     name: Unit tests
@@ -62,7 +62,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter edge-api test
+      - run: pnpm -r --filter "./apps/*" test
 
   integration:
     name: Integration tests (testcontainers)
@@ -99,4 +99,4 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter edge-api build
+      - run: pnpm -r --filter "./apps/*" build
