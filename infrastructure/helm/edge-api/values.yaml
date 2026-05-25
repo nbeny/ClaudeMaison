@@ -1,0 +1,150 @@
+# Valeurs par défaut du chart edge-api.
+# Override en prod via values-prod.yaml (Argo CD application).
+
+image:
+  repository: ghcr.io/yann-beny/claudemaison/edge-api
+  # Override par CI/CD : suit le digest signé par cosign (immuable).
+  # On laisse `tag` vide ; CI injecte via --set image.tag=sha-<commit>.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 2
+
+# NestJS Fastify boot ~600-900 Mo selon les instrumentations OTel.
+# Limits placés haut : on encaisse les pics de compilation GraphQL.
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 1Gi
+
+service:
+  type: ClusterIP
+  httpPort: 3000
+  grpcPort: 5001
+
+# Ingress pour le port HTTP/GraphQL uniquement. Le gRPC reste cluster-interne
+# (consommé par les autres binaires du Jour-1).
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: api.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #   - secretName: edge-api-tls
+  #     hosts:
+  #       - api.example.com
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Autoscaling : déclenche sur CPU pour Day-1, on ajoutera des métriques OTel
+# custom (RPS GraphQL) via Prometheus Adapter quand on aura du trafic réel.
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 75
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+podAnnotations: {}
+
+# Securité par défaut : non-root, RO root FS, no privilege escalation.
+# L'image runtime utilise déjà `USER node` (uid 1000).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop: [ALL]
+
+# Tolerations / nodeSelector / affinity : vide par défaut, override prod.
+tolerations: []
+nodeSelector: {}
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: edge-api
+
+# Probes pointées sur /health (Terminus).
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Variables d'environnement non-secrètes. Tout ce qui touche aux credentials
+# DB / JWT keys doit venir d'un Secret (ExternalSecret → Vault de préférence).
+config:
+  NODE_ENV: production
+  HTTP_PORT: "3000"
+  GRPC_PORT: "5001"
+  GRPC_HOST: 0.0.0.0
+  LOG_LEVEL: info
+  OTEL_SERVICE_NAME: edge-api
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability.svc:4318
+  # OIDC : override en values-prod (issuer Keycloak prod).
+  OIDC_ENABLED: "false"
+
+# Secret référencé par envFrom. Le chart NE crée PAS le secret : il doit être
+# provisionné par ExternalSecrets/Vault avant le déploiement, sinon le pod
+# reste en CreateContainerConfigError (signal explicite plutôt qu'une fuite
+# silencieuse de valeur factice).
+existingSecret: edge-api-secrets
+
+# ServiceMonitor pour Prometheus Operator. Désactivé par défaut : si la stack
+# obs n'utilise pas l'operator (Day-1 dev: Collector scrape manuel), ce n'est
+# pas pertinent.
+serviceMonitor:
+  enabled: false
+  interval: 15s
+  scrapeTimeout: 10s
+  # Le binaire pousse OTLP au Collector ; on n'expose pas /metrics directement.
+  # Quand on activera un PrometheusExporter local, on pointera dessus ici.
+  path: /metrics
+  port: http
+  labels: {}
+
+# NetworkPolicy : restreint le trafic egress aux composants attendus
+# (Postgres, Redis, Keycloak, Collector OTel). Désactivée par défaut car
+# nécessite un CNI compatible (Calico/Cilium).
+networkPolicy:
+  enabled: false

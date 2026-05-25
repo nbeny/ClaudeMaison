@@ -1,0 +1,16 @@
+edge-api {{ .Chart.AppVersion }} déployé en tant que release "{{ .Release.Name }}" dans le namespace "{{ .Release.Namespace }}".
+
+Vérifier le rollout :
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "edge-api.fullname" . }}
+
+Récupérer l'endpoint HTTP :
+{{- if .Values.ingress.enabled }}
+  https://{{ (index .Values.ingress.hosts 0).host }}
+{{- else }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "edge-api.fullname" . }} 3000:{{ .Values.service.httpPort }}
+{{- end }}
+
+Pré-requis avant déploiement :
+  - Secret `{{ .Values.existingSecret }}` doit exister dans le namespace (provisionné via ExternalSecrets/Vault).
+  - Si autoscaling activé, le metrics-server doit être présent dans le cluster.
+  - Si serviceMonitor.enabled, l'opérateur Prometheus doit être installé.

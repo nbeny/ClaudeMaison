@@ -1,0 +1,16 @@
+# Patterns to ignore when building Helm charts.
+.DS_Store
+.git/
+.gitignore
+.bzr/
+.hg/
+.svn/
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+.project
+.idea/
+.vscode/
+*.tgz

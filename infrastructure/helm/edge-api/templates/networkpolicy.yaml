@@ -1,0 +1,42 @@
+{{- if .Values.networkPolicy.enabled -}}
+# Egress restreint : on n'autorise que les composants attendus dans le chemin
+# de requête. Tout reste (DNS résolu via kube-dns, OTLP, métriques) est
+# implicitement bloqué par le default-deny qui doit exister dans le namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "edge-api.fullname" . }}
+  labels: {{- include "edge-api.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "edge-api.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # Trafic HTTP via l'ingress controller (label défini sur le ns ingress).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - { port: http, protocol: TCP }
+    # gRPC inter-binaires (autres apps de la plateforme).
+    - from:
+        - podSelector:
+            matchLabels:
+              claudemaison.io/binary: "true"
+      ports:
+        - { port: grpc, protocol: TCP }
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    # Postgres / Redis / Keycloak / OTel Collector : à compléter via override
+    # values-prod.yaml en fonction du déploiement réel (namespaces différents
+    # par cluster).
+{{- end }}

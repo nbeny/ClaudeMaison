@@ -21,3 +21,10 @@ infrastructure/docker/.env
 
 # Données binaires versionnées (ex: Keycloak realm export)
 infrastructure/docker/keycloak/realm-claudemaison-dev.json
+
+# Helm templates : la syntaxe Go template {{ ... }} casse le parser YAML de
+# Prettier (qui transforme `{{ x }}` en `{ { x } }`). Le chart est lint via
+# `helm lint`, qui sait ce qu'il fait.
+infrastructure/helm/**/templates/**
+infrastructure/helm/**/Chart.yaml
+infrastructure/helm/**/values.yaml

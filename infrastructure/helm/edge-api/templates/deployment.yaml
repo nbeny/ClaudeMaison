@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "edge-api.fullname" . }}
+  labels: {{- include "edge-api.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels: {{- include "edge-api.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "edge-api.selectorLabels" . | nindent 8 }}
+      annotations:
+        # Force le rollout quand ConfigMap/Secret changent. Argo CD a son
+        # propre mécanisme mais on garde celui-ci pour les déploiements Helm
+        # nus (qa, smoke clusters).
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "edge-api.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: edge-api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.httpPort }}
+              protocol: TCP
+            - name: grpc
+              containerPort: {{ .Values.service.grpcPort }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "edge-api.fullname" . }}
+            {{- if .Values.existingSecret }}
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+            {{- end }}
+          env:
+            # OTel resource attributes : pod/namespace pour la déduplication
+            # côté Collector (k8sattributesprocessor).
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "k8s.namespace.name=$(POD_NAMESPACE),k8s.pod.name=$(POD_NAME),k8s.node.name=$(NODE_NAME)"
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef: { fieldPath: metadata.namespace }
+            - name: POD_NAME
+              valueFrom:
+                fieldRef: { fieldPath: metadata.name }
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef: { fieldPath: spec.nodeName }
+          livenessProbe: {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe: {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          # readOnlyRootFilesystem=true : NestJS/Pino n'ont besoin de rien
+          # écrire au runtime ; OTel ne dump pas sur disque par défaut. Si on
+          # active /tmp scratch un jour, monter un emptyDir.
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,18 @@
+apiVersion: v2
+name: edge-api
+description: Binaire edge-api de ClaudeMaison — façade GraphQL/REST/WS (auth, billing, gateway)
+type: application
+# version : SemVer du chart lui-même, incrémenter à chaque modification de
+# template ou de defaults. appVersion : tag de l'image Docker, suivi par CI.
+version: 0.1.0
+appVersion: "0.0.1"
+home: https://github.com/yann-beny/ClaudeMaison
+sources:
+  - https://github.com/yann-beny/ClaudeMaison
+maintainers:
+  - name: Yann Beny
+keywords:
+  - claudemaison
+  - nestjs
+  - graphql
+  - grpc
