@@ -36,6 +36,14 @@ const EnvSchema = z.object({
 
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
 
+  // Billing gRPC (étape 4). Le serveur gRPC ne démarre que si BILLING_GRPC_TOKEN
+  // est défini ; c'est ce qui signe l'activation. Le token est partagé avec les
+  // callers internes (ai-core, workers) — Jour-1 c'est un secret simple, plus
+  // tard ce sera mTLS via le maillage de services.
+  BILLING_GRPC_HOST: z.string().default('0.0.0.0'),
+  BILLING_GRPC_PORT: z.coerce.number().int().positive().default(5001),
+  BILLING_GRPC_TOKEN: z.string().min(32).optional(),
+
   GIT_COMMIT: z.string().optional(),
 }).superRefine((env, ctx) => {
   // OIDC : tout-ou-rien. Si l'une des vars est fournie, toutes le doivent.

@@ -2,12 +2,13 @@
 -- Source de vérité : ce fichier. Les migrations sont générées par diff.
 --
 -- Convention : un schéma Postgres par bounded context métier.
--- Le binaire `edge-api` possède `auth` et `billing` (étape 4).
+-- Le binaire `edge-api` possède `auth` et `billing`.
 
 CREATE EXTENSION IF NOT EXISTS "citext";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA IF NOT EXISTS billing;
 
 -- ---------------------------------------------------------------------------
 -- auth.users
@@ -101,3 +102,99 @@ CREATE UNIQUE INDEX federated_identities_provider_subject_idx
     ON auth.federated_identities (provider, subject);
 CREATE INDEX federated_identities_user_idx
     ON auth.federated_identities (user_id);
+
+-- ===========================================================================
+-- Schéma billing : plans, abonnements, événements d'usage.
+--
+-- Source d'écriture des `usage_events` : `ai-core` via gRPC (binaire séparé,
+-- pas Jour-1). Source de lecture : ce binaire (`edge-api`) pour exposer les
+-- quotas restants au front et pour répondre aux CheckQuota gRPC.
+--
+-- Quotas : tous exprimés en unité native, par cycle de facturation
+-- (current_period_start/end sur la subscription). Conventions :
+--   - NULL  → ressource non-mesurée pour ce plan
+--   - -1    → illimité
+--   - >= 0  → plafond strict
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- billing.plans
+-- ---------------------------------------------------------------------------
+CREATE TABLE billing.plans (
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    slug                    TEXT NOT NULL UNIQUE,
+    name                    TEXT NOT NULL,
+    description             TEXT,
+    -- Limites par cycle. BIGINT pour les tokens (peut dépasser 2^31 sur
+    -- les plans entreprise), NUMERIC pour le stockage (fractions de Go).
+    quota_llm_tokens        BIGINT,
+    quota_embeddings_tokens BIGINT,
+    quota_tool_runs         BIGINT,
+    quota_storage_gb        NUMERIC(12, 2),
+    -- Prix indicatif. Le module billing ne facture pas Jour-1 — il sera
+    -- branché à un PSP EU plus tard. On garde la colonne pour cohérence
+    -- d'affichage côté front.
+    price_eur_month_micro   BIGINT NOT NULL DEFAULT 0,
+    is_public               BOOLEAN NOT NULL DEFAULT true,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ---------------------------------------------------------------------------
+-- billing.subscriptions
+-- Une seule subscription active par workspace : indexes uniques partiels.
+-- ---------------------------------------------------------------------------
+CREATE TABLE billing.subscriptions (
+    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id         UUID NOT NULL REFERENCES auth.workspaces(id) ON DELETE CASCADE,
+    plan_id              UUID NOT NULL REFERENCES billing.plans(id) ON DELETE RESTRICT,
+    status               TEXT NOT NULL CHECK (status IN ('active', 'past_due', 'cancelled')),
+    current_period_start TIMESTAMPTZ NOT NULL,
+    current_period_end   TIMESTAMPTZ NOT NULL,
+    cancelled_at         TIMESTAMPTZ,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT subscriptions_period_chk CHECK (current_period_end > current_period_start)
+);
+
+CREATE UNIQUE INDEX subscriptions_workspace_active_idx
+    ON billing.subscriptions (workspace_id)
+    WHERE status = 'active';
+
+CREATE INDEX subscriptions_plan_idx ON billing.subscriptions (plan_id);
+
+-- ---------------------------------------------------------------------------
+-- billing.usage_events
+--
+-- Écrit par `ai-core` (et plus tard `tools`, `retrieval`) via gRPC. Pas de FK
+-- sur `auth.workspaces` : le couplage est volontairement faible pour que les
+-- événements survivent à une migration/séparation des binaires et qu'on puisse
+-- accepter une écriture même si l'enregistrement de la workspace n'est pas
+-- visible (lag de réplication, par exemple).
+--
+-- L'idempotence est garantie par `idempotency_key` (UNIQUE). L'appelant
+-- gRPC peut réémettre une batch entière sans risque de double-comptage.
+-- ---------------------------------------------------------------------------
+CREATE TABLE billing.usage_events (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    idempotency_key TEXT NOT NULL,
+    workspace_id    UUID NOT NULL,
+    user_id         UUID,
+    kind            TEXT NOT NULL CHECK (kind IN (
+        'llm_tokens', 'embeddings_tokens', 'tool_runs', 'storage_gb_day'
+    )),
+    quantity        NUMERIC NOT NULL CHECK (quantity >= 0),
+    unit            TEXT NOT NULL,
+    cost_eur_micro  BIGINT NOT NULL DEFAULT 0,
+    metadata        JSONB,
+    occurred_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    recorded_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX usage_events_idempotency_idx
+    ON billing.usage_events (idempotency_key);
+
+-- Index principal de requête : agrégation d'usage par workspace + kind
+-- sur une fenêtre temporelle (la période de facturation courante).
+CREATE INDEX usage_events_workspace_kind_occurred_idx
+    ON billing.usage_events (workspace_id, kind, occurred_at);

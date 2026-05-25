@@ -1,0 +1,67 @@
+// Contrat gRPC entre les binaires producteurs d'usage (ai-core, workers,
+// tools, retrieval) et `edge-api` qui héberge le module billing.
+//
+// Versionning : le package est figé en `claudemaison.billing.v1`. Tout
+// changement incompatible créera un `v2`, jamais d'édition en place.
+
+syntax = "proto3";
+
+package claudemaison.billing.v1;
+
+import "google/protobuf/timestamp.proto";
+
+service Billing {
+  // Enregistre un lot d'événements d'usage. Idempotent par
+  // `idempotency_key` : l'appelant peut rejouer la même requête sans
+  // double-comptage. Retourne le nombre d'événements acceptés vs. ignorés
+  // (déjà vus).
+  rpc RecordUsage(RecordUsageRequest) returns (RecordUsageResponse);
+
+  // Vérifie le quota restant d'une workspace pour un kind donné, pour la
+  // période de facturation en cours. Pas de side-effect. Si la workspace
+  // n'a pas de subscription active, on retombe sur le plan `free`.
+  rpc CheckQuota(CheckQuotaRequest) returns (CheckQuotaResponse);
+}
+
+// kind admissibles : "llm_tokens", "embeddings_tokens", "tool_runs",
+// "storage_gb_day". Le serveur rejette tout autre kind avec INVALID_ARGUMENT.
+message UsageEvent {
+  string idempotency_key = 1;
+  string workspace_id = 2;
+  string user_id = 3;
+  string kind = 4;
+  double quantity = 5;
+  string unit = 6;
+  int64 cost_eur_micro = 7;
+  google.protobuf.Timestamp occurred_at = 8;
+  map<string, string> metadata = 9;
+}
+
+message RecordUsageRequest {
+  repeated UsageEvent events = 1;
+}
+
+message RecordUsageResponse {
+  int32 accepted = 1;
+  int32 duplicates = 2;
+}
+
+message CheckQuotaRequest {
+  string workspace_id = 1;
+  string kind = 2;
+}
+
+// Convention sur les quotas :
+//   limit = -1 → illimité (allowed=true tant que le plan couvre le kind)
+//   limit = 0 → bloqué (allowed=false)
+//   limit > 0 → strict, allowed = used < limit
+//   limit absent (unset) → ressource non-mesurée pour ce plan (allowed=true)
+message CheckQuotaResponse {
+  bool allowed = 1;
+  optional double limit = 2;
+  double used = 3;
+  optional double remaining = 4;
+  google.protobuf.Timestamp period_start = 5;
+  google.protobuf.Timestamp period_end = 6;
+  string plan_slug = 7;
+}

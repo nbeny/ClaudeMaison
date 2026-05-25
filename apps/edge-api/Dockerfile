@@ -30,7 +30,10 @@ WORKDIR /app
 COPY --from=build /pruned/dist ./dist
 COPY --from=build /pruned/node_modules ./node_modules
 COPY --from=build /pruned/package.json ./
+# main.ts résout les .proto via join(__dirname, '..', 'proto', ...)
+COPY --from=build /repo/apps/edge-api/proto ./proto
 EXPOSE 3000
+EXPOSE 5001
 USER node
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

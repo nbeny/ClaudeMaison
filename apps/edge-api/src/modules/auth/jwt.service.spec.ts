@@ -16,6 +16,8 @@ function makeConfig(overrides: Partial<Env> = {}): ConfigService<Env, true> {
     JWT_ACCESS_TTL_SECONDS: 60,
     JWT_REFRESH_TTL_SECONDS: 3600,
     ALLOWED_ORIGINS: ['http://localhost:3001'],
+    BILLING_GRPC_HOST: '0.0.0.0',
+    BILLING_GRPC_PORT: 5001,
     ...overrides,
   };
   return {

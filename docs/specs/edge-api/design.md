@@ -64,6 +64,17 @@ Les trois cohabitent dans `apps/edge-api/` avec des frontières internes claires
 
 Réservé au mode vocal futur (ADR-0008). Aucun WS exposé au Jour-1.
 
+### 3.4 gRPC (chemin interne, étape 4)
+
+Endpoint interne pour les binaires producteurs d'usage (`ai-core`, `workers`, `tools`, `retrieval`). Démarré conditionnellement sur la présence de `BILLING_GRPC_TOKEN`.
+
+- Proto : `apps/edge-api/proto/billing.v1.proto` — package figé `claudemaison.billing.v1`.
+- Méthodes :
+  - `RecordUsage(RecordUsageRequest) → RecordUsageResponse` — batch idempotent par `idempotency_key`. Retourne `{accepted, duplicates}`.
+  - `CheckQuota(CheckQuotaRequest) → CheckQuotaResponse` — lecture pure, retombe sur le plan `free` si la workspace n'a pas de subscription active.
+- Auth : metadata `authorization: Bearer <BILLING_GRPC_TOKEN>`, comparaison `timingSafeEqual`. À terme, remplacé par mTLS via le maillage de services.
+- Port par défaut : `5001`.
+
 ## 4. Stack
 
 | Couche | Choix |
@@ -86,10 +97,21 @@ Réservé au mode vocal futur (ADR-0008). Aucun WS exposé au Jour-1.
 
 Tables possédées par ce binaire (schémas dans la base partagée) :
 
-- `auth` : `users`, `workspaces`, `workspace_members`, `sessions`, `oidc_clients`
-- `billing` : `plans`, `subscriptions`, `usage_events` (les lectures se font ici, l'écriture vient aussi de `ai-core` via gRPC interne)
+- `auth` : `users`, `workspaces`, `workspace_members`, `sessions`, `federated_identities`
+- `billing` : `plans`, `subscriptions`, `usage_events` (les lectures se font ici, l'écriture des `usage_events` vient de `ai-core`/`workers`/`tools` via gRPC interne)
 
-Schémas SQL complets : voir [Partie VI §6.1 de l'architecture](../../architecture/2026-05-24-architecture-souveraine.md#61-postgresql--cœur-métier).
+Schémas SQL complets : voir [Partie VI §6.1 de l'architecture](../../architecture/2026-05-24-architecture-souveraine.md#61-postgresql--cœur-métier) ; la source de vérité déclarative est `infrastructure/db/schema.sql`.
+
+### 5.1 Modèle de quotas (étape 4)
+
+- Un plan définit un quota par `kind` d'usage. Conventions :
+  - colonne `NULL` → ressource non-mesurée pour ce plan ;
+  - `-1` → illimité ;
+  - `>= 0` → plafond strict (un `0` est une interdiction).
+- Une `subscription` lie une workspace à un plan, avec `current_period_start`/`current_period_end` portés par la ligne. Un seul abonnement actif par workspace (index unique partiel sur `status='active'`).
+- Sans subscription active, le service retombe sur le plan `free` avec une période = mois calendaire UTC courant. Ce fallback est volontairement explicite Jour-1, tant que la création de workspace n'instancie pas encore d'abonnement.
+- Les `usage_events` sont indexés par `(workspace_id, kind, occurred_at)` ; la fonction `usage` calcule `SUM(quantity)` sur la fenêtre `[period_start, period_end)`.
+- L'idempotence d'écriture est garantie par `idempotency_key UNIQUE` ; `ON CONFLICT DO NOTHING` permet aux producteurs de rejouer un batch sans double-comptage.
 
 ## 6. Configuration
 
@@ -107,6 +129,9 @@ Toutes les variables d'environnement sont **validées au boot** par un schéma Z
 | `JWT_SIGNING_KEY` | clé HMAC ou chemin PEM RSA (lu depuis Vault en prod) | — |
 | `ALLOWED_ORIGINS` | CSV pour CORS | `http://localhost:3001` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | collecteur OTel | — |
+| `BILLING_GRPC_HOST` | host d'écoute du serveur gRPC billing | `0.0.0.0` |
+| `BILLING_GRPC_PORT` | port d'écoute du serveur gRPC billing | `5001` |
+| `BILLING_GRPC_TOKEN` | bearer partagé pour les callers internes (active le serveur s'il est défini) | — |
 
 ## 7. Sécurité
 
@@ -142,7 +167,7 @@ Toutes les variables d'environnement sont **validées au boot** par un schéma Z
 | 1 | Squelette NestJS bootable, `/health`, `/graphql` (avec `viewer` placeholder), Dockerfile, docker-compose dev (Postgres + Redis) | **fait (commit suivant)** |
 | 2 | Module `auth` : inscription/connexion locales, JWT, schéma SQL initial, migrations Atlas | **fait** |
 | 3 | Module `auth` : OIDC Authorization Code Flow + Keycloak self-hosted en compose | **fait** |
-| 4 | Module `billing` : plans, quotas, `usage_events`, intégration gRPC pour écriture depuis `ai-core` | à venir |
+| 4 | Module `billing` : plans, quotas, `usage_events`, intégration gRPC pour écriture depuis `ai-core` | **fait** |
 | 5 | Observabilité OTel complète + dashboards Grafana | à venir |
 | 6 | Tests d'intégration Testcontainers + CI pipeline | à venir |
 
