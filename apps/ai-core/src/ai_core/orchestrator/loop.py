@@ -1,8 +1,9 @@
-"""Squelette de la boucle d'orchestration.
+"""Boucle d'orchestration — Jour-1.
 
-À ce stade : un stub qui montre la surface de l'API. La vraie boucle (recall
-mémoire → plan → tool calls → réponse) sera implémentée incrémentalement
-sur des branches dédiées.
+À ce stade : passthrough vers inference-router avec un system prompt fixe.
+La vraie boucle (recall mémoire → plan → tool calls → réponse) sera
+implémentée incrémentalement sur des branches dédiées sans casser la
+signature `turn()`.
 """
 
 from __future__ import annotations
@@ -10,9 +11,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+from ai_core.config import get_settings
+from ai_core.inference import ChatMessage, InferenceClient, InferenceError
 from ai_core.logging import get_logger
 
 logger = get_logger(__name__)
+
+_SYSTEM_PROMPT = (
+    'Tu es ClaudeMaison, un assistant IA souverain hébergé en Europe. '
+    'Réponds de manière concise et précise. Si tu ne sais pas, dis-le.'
+)
 
 
 @dataclass(slots=True)
@@ -35,22 +43,44 @@ class TurnOutput:
 class Orchestrator:
     """Boucle de raisonnement principale.
 
-    Au Jour-1 c'est un pass-through vers le LLM. Au fur et à mesure qu'on
-    ajoutera memory-service.recall(), planner agent, critic, on enrichira
-    sans casser la signature `turn()`.
+    Au Jour-1 c'est un pass-through vers inference-router. Quand on ajoutera
+    memory recall, planner, critic, on enrichira sans changer la surface.
+
+    Le client d'inférence est injecté pour permettre le mock en tests.
     """
 
+    def __init__(self, inference: InferenceClient | None = None) -> None:
+        self._inference = inference or InferenceClient()
+
     async def turn(self, input: TurnInput) -> TurnOutput:
+        model = input.model or get_settings().LLM_DEFAULT_MODEL
         logger.info(
-            'orchestrator turn',
+            'orchestrator.turn',
             workspace_id=input.workspace_id,
             chat_id=input.chat_id,
-            model=input.model,
+            model=model,
         )
-        # TODO: appel inference-router (OpenAI-compatible) + memory recall.
-        # Ce stub renvoie un écho pour valider le câblage HTTP/gRPC bout en bout.
+
+        messages = [
+            ChatMessage(role='system', content=_SYSTEM_PROMPT),
+            ChatMessage(role='user', content=input.message),
+        ]
+
+        try:
+            completion = await self._inference.chat(model=model, messages=messages)
+        except InferenceError as exc:
+            logger.warning('orchestrator.inference_error', error=str(exc), status=exc.status)
+            return TurnOutput(
+                chat_id=input.chat_id,
+                text='Désolé, le modèle est indisponible.',
+                finish_reason='error',
+            )
+
         return TurnOutput(
             chat_id=input.chat_id,
-            text=f'echo: {input.message}',
-            finish_reason='stop',
+            text=completion.text,
+            finish_reason=completion.finish_reason,
         )
+
+    async def aclose(self) -> None:
+        await self._inference.aclose()

@@ -37,11 +37,13 @@ class Settings(BaseSettings):
     QDRANT_URL: str = 'http://localhost:6333'
     QDRANT_API_KEY: str | None = None
 
-    # vLLM via inference-router : ici on appelle un endpoint OpenAI-compatible.
-    # En dev local sans GPU, peut pointer vers un mock ou Ollama.
-    LLM_BASE_URL: str = 'http://localhost:8000/v1'
+    # inference-router (OpenAI-compatible). Le suffixe /v1 fait partie de l'URL
+    # pour qu'on puisse colle path = "/chat/completions" derrière. En dev sans
+    # GPU, on peut pointer vers Ollama ou un mock OpenAI-compat.
+    LLM_BASE_URL: str = 'http://localhost:4200/v1'
     LLM_API_KEY: str = 'dev-only'
     LLM_DEFAULT_MODEL: str = 'mistral-large-instruct'
+    LLM_TIMEOUT_S: float = 120.0
 
     OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None
     OTEL_SERVICE_NAME: str = 'ai-core'
