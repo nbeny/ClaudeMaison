@@ -1,0 +1,11 @@
+{{- if .Values.podDisruptionBudget.enabled -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "retrieval.fullname" . }}
+  labels: {{- include "retrieval.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels: {{- include "retrieval.selectorLabels" . | nindent 6 }}
+{{- end }}

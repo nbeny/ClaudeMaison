@@ -1,0 +1,125 @@
+# Valeurs par défaut du chart retrieval.
+
+image:
+  repository: ghcr.io/yann-beny/claudemaison/retrieval
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 2
+
+# Embeddings + Qdrant client : la mémoire dépend du modèle d'embedding.
+# Day-1 = fake embedder déterministe (négligeable). Production avec
+# fastembed/sentence-transformers = remonter limits.memory.
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+service:
+  type: ClusterIP
+  httpPort: 4100
+
+# Retrieval est interne (consommé par ai-core via /v1/search). Pas d'ingress
+# par défaut. Activer uniquement pour debug/admin externe.
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: retrieval.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 75
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+podAnnotations: {}
+
+# UID non pinné dans le Dockerfile Python (adduser -S busybox alloue
+# dynamiquement). On laisse runAsNonRoot=true ; le runtime résout via
+# l'image USER. Pour pinner, fixer aussi dans le Dockerfile et set
+# runAsUser ici. (Ticket de suivi pour Day-2.)
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 100
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: [ALL]
+
+tolerations: []
+nodeSelector: {}
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: retrieval
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+config:
+  HTTP_PORT: "4100"
+  LOG_LEVEL: info
+  OTEL_SERVICE_NAME: retrieval
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability.svc:4318
+  # Qdrant cluster-interne : à override en prod si déployé hors-cluster.
+  QDRANT_URL: http://qdrant.data.svc:6333
+  QDRANT_COLLECTION: claudemaison
+  EMBED_DIM: "384"
+
+existingSecret: retrieval-secrets
+
+serviceMonitor:
+  enabled: false
+  interval: 15s
+  scrapeTimeout: 10s
+  path: /metrics
+  port: http
+  labels: {}
+
+networkPolicy:
+  enabled: false

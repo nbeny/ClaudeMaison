@@ -1,0 +1,16 @@
+apiVersion: v2
+name: workers
+description: Binaire workers de ClaudeMaison — consommateur Arq (Redis) pour jobs asynchrones
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+home: https://github.com/yann-beny/ClaudeMaison
+sources:
+  - https://github.com/yann-beny/ClaudeMaison
+maintainers:
+  - name: Yann Beny
+keywords:
+  - claudemaison
+  - workers
+  - arq
+  - background-jobs

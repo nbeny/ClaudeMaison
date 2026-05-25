@@ -1,0 +1,25 @@
+{{- if .Values.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "workers.fullname" . }}
+  labels: {{- include "workers.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "workers.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  # Workers ne reçoivent rien — pas de service, pas d'ingress entrant.
+  # On bloque tout en ingress par défaut (Day-1 : pas même /metrics).
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    # Redis (queue Arq) + retrieval + OTel Collector : préciser les
+    # selectors en values-prod selon les namespaces.
+{{- end }}

@@ -1,0 +1,17 @@
+realtime {{ .Chart.AppVersion }} déployé en tant que release "{{ .Release.Name }}" dans le namespace "{{ .Release.Namespace }}".
+
+Vérifier le rollout :
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "realtime.fullname" . }}
+
+Endpoint WebSocket :
+{{- if .Values.ingress.enabled }}
+  wss://{{ (index .Values.ingress.hosts 0).host }}/ws
+{{- else }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "realtime.fullname" . }} 3100:{{ .Values.service.httpPort }}
+  → ws://localhost:3100/ws
+{{- end }}
+
+Pré-requis avant déploiement :
+  - Secret `{{ .Values.existingSecret }}` doit exister dans le namespace.
+  - Redis joignable à `config.REDIS_URL` (pub/sub inter-pods).
+  - terminationGracePeriodSeconds={{ .Values.terminationGracePeriodSeconds }}s pour drain WS — ne pas réduire en prod.

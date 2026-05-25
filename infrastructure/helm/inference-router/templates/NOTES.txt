@@ -1,0 +1,17 @@
+inference-router {{ .Chart.AppVersion }} déployé en tant que release "{{ .Release.Name }}" dans le namespace "{{ .Release.Namespace }}".
+
+Vérifier le rollout :
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "inference-router.fullname" . }}
+
+Pré-requis CRITIQUE :
+  - `config.MODEL_BACKENDS` doit pointer vers les backends LLM réels.
+    Format : "model-id=url1,url2;other-model=url3"
+    Exemple :
+      llama-3.1-8b=http://vllm-llama-8b.llm.svc:8000;mistral-7b=http://vllm-mistral.llm.svc:8000
+  - Sans MODEL_BACKENDS, ai-core renverra "modèle indisponible" à chaque requête.
+
+Test :
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "inference-router.fullname" . }} 4200:{{ .Values.service.httpPort }}
+  curl -X POST http://localhost:4200/v1/chat/completions \
+    -H 'Content-Type: application/json' \
+    -d '{"model":"llama-3.1-8b","messages":[{"role":"user","content":"ping"}]}'

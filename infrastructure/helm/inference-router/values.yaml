@@ -1,0 +1,125 @@
+# Valeurs par défaut du chart inference-router.
+
+image:
+  repository: ghcr.io/yann-beny/claudemaison/inference-router
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 2
+
+# Pur proxy I/O-bound : peu de CPU, mais beaucoup de connexions simultanées
+# en streaming. Memory raisonnable, CPU bas.
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+service:
+  type: ClusterIP
+  httpPort: 4200
+
+# Interne uniquement (ai-core consomme /v1/chat/completions). Pas d'ingress
+# par défaut.
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: inference.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 100
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: [ALL]
+
+tolerations: []
+nodeSelector: {}
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: inference-router
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Streaming chunked : grace period pour laisser les requêtes en cours finir.
+terminationGracePeriodSeconds: 30
+
+config:
+  HTTP_PORT: "4200"
+  LOG_LEVEL: info
+  OTEL_SERVICE_NAME: inference-router
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability.svc:4318
+  # Mapping modèle → backends. Format : "model=url1,url2;model2=url3".
+  # En prod : pointer vers les services internes des backends LLM
+  # (vLLM, llama-cpp-server, etc.) déployés dans le cluster.
+  # Exemple : "llama-3.1-8b=http://vllm-llama-8b.llm.svc:8000;mistral-7b=http://vllm-mistral.llm.svc:8000"
+  MODEL_BACKENDS: ""
+  REQUEST_TIMEOUT_S: "120"
+
+existingSecret: inference-router-secrets
+
+serviceMonitor:
+  enabled: false
+  interval: 15s
+  scrapeTimeout: 10s
+  path: /metrics
+  port: http
+  labels: {}
+
+networkPolicy:
+  enabled: false

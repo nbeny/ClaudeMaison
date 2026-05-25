@@ -1,0 +1,37 @@
+{{- if .Values.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "realtime.fullname" . }}
+  labels: {{- include "realtime.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "realtime.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # Trafic WS/HTTP via l'ingress controller.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - { port: http, protocol: TCP }
+    # Pub/sub interne depuis edge-api (publish vers Redis qui notifie ce pod).
+    - from:
+        - podSelector:
+            matchLabels:
+              claudemaison.io/binary: "true"
+      ports:
+        - { port: http, protocol: TCP }
+  egress:
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    # Redis (pub/sub) + OTel Collector : à compléter via values-prod en
+    # fonction des namespaces réels.
+{{- end }}

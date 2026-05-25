@@ -1,0 +1,16 @@
+tools {{ .Chart.AppVersion }} déployé en tant que release "{{ .Release.Name }}" dans le namespace "{{ .Release.Namespace }}".
+
+Vérifier le rollout :
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "tools.fullname" . }}
+
+Endpoint gRPC interne :
+  {{ include "tools.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.grpcPort }}
+
+NOTE : les probes Day-1 sont en TCP socket (pas grpc_health_probe). Si la
+liveness ne descend pas correctement en cas de gRPC dégradé, ajouter
+grpc_health_probe dans le Dockerfile + service Health gRPC et override
+les probes en exec.
+
+Test avec grpcurl :
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "tools.fullname" . }} 5005:{{ .Values.service.grpcPort }}
+  grpcurl -plaintext -d '{}' localhost:5005 tools.v1.ToolService/ListTools

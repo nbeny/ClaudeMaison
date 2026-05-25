@@ -1,0 +1,14 @@
+ai-core {{ .Chart.AppVersion }} déployé en tant que release "{{ .Release.Name }}" dans le namespace "{{ .Release.Namespace }}".
+
+Vérifier le rollout :
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "ai-core.fullname" . }}
+
+Pré-requis :
+  - Secret `{{ .Values.existingSecret }}` doit exister dans le namespace.
+  - inference-router déployé et joignable à `config.LLM_BASE_URL` ({{ .Values.config.LLM_BASE_URL }}).
+  - retrieval déployé et joignable à `config.RETRIEVAL_URL` ({{ .Values.config.RETRIEVAL_URL }}).
+  - terminationGracePeriodSeconds={{ .Values.terminationGracePeriodSeconds }}s pour laisser les conversations en cours finir.
+
+Test :
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "ai-core.fullname" . }} 4000:{{ .Values.service.httpPort }}
+  curl http://localhost:4000/health

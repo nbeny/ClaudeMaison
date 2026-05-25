@@ -1,0 +1,95 @@
+# Valeurs par défaut du chart workers.
+# Particularités : pas de service, pas d'ingress, pas d'HPA CPU (le bon
+# signal serait la profondeur de queue Redis via KEDA — Day-2).
+
+image:
+  repository: ghcr.io/yann-beny/claudemaison/workers
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Concurrence interne (Arq max_jobs) × replicaCount = concurrence totale.
+# Tuner selon le throughput attendu et la pression sur retrieval/Qdrant.
+replicaCount: 2
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 768Mi
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 100
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: [ALL]
+
+tolerations: []
+nodeSelector: {}
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: workers
+
+# Pas de probe HTTP — pas d'endpoint. Liveness via exec : vérifie que le
+# processus principal (python -m workers.main) tourne. Si le worker se
+# fige sur un job, c'est K8s qui restart au prochain SIGTERM (les jobs
+# Arq ont leurs propres timeouts). Affiner Day-2 avec un endpoint
+# /healthz si on veut détecter les workers zombies.
+livenessProbe:
+  exec:
+    command:
+      - sh
+      - -c
+      - "pgrep -f 'workers.main' > /dev/null"
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Pas de readinessProbe : pas de service, K8s ne route rien vers le pod.
+
+# Grace period long : laisser les jobs en cours finir. Arq SIGTERM →
+# arrête de poll de nouveaux jobs et drain les en cours.
+terminationGracePeriodSeconds: 120
+
+config:
+  LOG_LEVEL: info
+  OTEL_SERVICE_NAME: workers
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability.svc:4318
+  REDIS_URL: redis://redis-master.data.svc:6379
+  # URL retrieval pour les jobs d'indexation.
+  RETRIEVAL_URL: http://retrieval.claudemaison.svc:4100
+  # Concurrence interne par pod.
+  WORKER_MAX_JOBS: "10"
+
+existingSecret: workers-secrets
+
+networkPolicy:
+  enabled: false

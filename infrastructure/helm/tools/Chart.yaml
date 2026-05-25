@@ -1,0 +1,16 @@
+apiVersion: v2
+name: tools
+description: Binaire tools de ClaudeMaison — registre d'outils exécutables exposé en gRPC
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+home: https://github.com/yann-beny/ClaudeMaison
+sources:
+  - https://github.com/yann-beny/ClaudeMaison
+maintainers:
+  - name: Yann Beny
+keywords:
+  - claudemaison
+  - tools
+  - grpc
+  - sandbox

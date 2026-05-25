@@ -1,0 +1,16 @@
+apiVersion: v2
+name: inference-router
+description: Binaire inference-router de ClaudeMaison — proxy OpenAI-compatible round-robin vers les backends LLM
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+home: https://github.com/yann-beny/ClaudeMaison
+sources:
+  - https://github.com/yann-beny/ClaudeMaison
+maintainers:
+  - name: Yann Beny
+keywords:
+  - claudemaison
+  - llm
+  - inference
+  - openai-compatible

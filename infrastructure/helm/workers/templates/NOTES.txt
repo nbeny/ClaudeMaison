@@ -1,0 +1,15 @@
+workers {{ .Chart.AppVersion }} déployé en tant que release "{{ .Release.Name }}" dans le namespace "{{ .Release.Namespace }}".
+
+Vérifier le rollout :
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "workers.fullname" . }}
+
+Spécificités :
+  - Pas de service, pas d'ingress (consume Redis, push résultats à retrieval).
+  - Pas de HPA CPU (Day-1 statique). Bon signal = profondeur queue Redis via KEDA (Day-2).
+  - terminationGracePeriodSeconds={{ .Values.terminationGracePeriodSeconds }}s pour drain les jobs en cours.
+
+Logs :
+  kubectl -n {{ .Release.Namespace }} logs -l app.kubernetes.io/name={{ include "workers.name" . }} -f
+
+Inspecter la queue Arq :
+  kubectl -n {{ .Release.Namespace }} exec -it deploy/redis -- redis-cli LLEN arq:queue

@@ -1,0 +1,13 @@
+retrieval {{ .Chart.AppVersion }} déployé en tant que release "{{ .Release.Name }}" dans le namespace "{{ .Release.Namespace }}".
+
+Vérifier le rollout :
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "retrieval.fullname" . }}
+
+Test rapide depuis le cluster (consommateur attendu : ai-core) :
+  kubectl -n {{ .Release.Namespace }} run curl --rm -it --image=curlimages/curl -- \
+    curl -s http://{{ include "retrieval.fullname" . }}:{{ .Values.service.httpPort }}/health
+
+Pré-requis :
+  - Secret `{{ .Values.existingSecret }}` doit exister dans le namespace.
+  - Qdrant joignable à `config.QDRANT_URL` ({{ .Values.config.QDRANT_URL }}).
+  - Collection `{{ .Values.config.QDRANT_COLLECTION }}` créée automatiquement au startup si absente (dim={{ .Values.config.EMBED_DIM }}).

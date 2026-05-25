@@ -1,0 +1,137 @@
+# Valeurs par défaut du chart realtime.
+# Override en prod via values-prod.yaml.
+
+image:
+  repository: ghcr.io/yann-beny/claudemaison/realtime
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 2
+
+# Realtime maintient des connexions WS longue durée : faible CPU au repos,
+# pics sur fan-out de messages. Memory limit prudent pour éviter OOM si
+# beaucoup de sockets simultanées.
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 768Mi
+
+service:
+  type: ClusterIP
+  httpPort: 3100
+
+# Ingress avec annotations spécifiques WebSocket : timeouts longs, upgrade.
+ingress:
+  enabled: false
+  className: nginx
+  annotations:
+    # nginx-ingress : autorise l'upgrade WS et garde la connexion ouverte
+    # longtemps (24h par défaut côté nginx). Ajuster selon le LB en amont.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+  hosts:
+    - host: realtime.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Autoscaling sur CPU : pour WS le bon signal serait le nombre de connexions
+# actives mais ça nécessite un custom metric. Day-1 : on tape CPU.
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop: [ALL]
+
+tolerations: []
+nodeSelector: {}
+# Anti-affinity sur le hostname : éviter que tous les replicas tombent si
+# un node disparaît (les connexions WS sont stateful, on perd l'état).
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: realtime
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Drain : grace period long pour laisser les WS se fermer proprement.
+# Le binaire doit refuser les nouvelles connexions sur SIGTERM (déjà
+# implémenté côté Fastify) et laisser les existantes terminer.
+terminationGracePeriodSeconds: 60
+
+config:
+  NODE_ENV: production
+  HTTP_PORT: "3100"
+  LOG_LEVEL: info
+  OTEL_SERVICE_NAME: realtime
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability.svc:4318
+  # URL Redis utilisée pour pub/sub inter-pods (sticky sessions évitées :
+  # n'importe quel pod peut publier vers la connexion WS de n'importe quel autre).
+  REDIS_URL: redis://redis-master.data.svc:6379
+
+existingSecret: realtime-secrets
+
+serviceMonitor:
+  enabled: false
+  interval: 15s
+  scrapeTimeout: 10s
+  path: /metrics
+  port: http
+  labels: {}
+
+networkPolicy:
+  enabled: false

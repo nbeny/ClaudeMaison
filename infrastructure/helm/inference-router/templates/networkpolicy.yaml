@@ -1,0 +1,30 @@
+{{- if .Values.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "inference-router.fullname" . }}
+  labels: {{- include "inference-router.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "inference-router.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # ai-core et autres binaires internes uniquement.
+    - from:
+        - podSelector:
+            matchLabels:
+              claudemaison.io/binary: "true"
+      ports:
+        - { port: http, protocol: TCP }
+  egress:
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    # Backends LLM (vLLM, llama-cpp-server, etc.) + OTel Collector :
+    # à compléter via values-prod selon les namespaces des backends.
+{{- end }}

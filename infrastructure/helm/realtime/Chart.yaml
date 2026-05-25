@@ -1,0 +1,16 @@
+apiVersion: v2
+name: realtime
+description: Binaire realtime de ClaudeMaison — gateway WebSocket pour streaming tokens & présence
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+home: https://github.com/yann-beny/ClaudeMaison
+sources:
+  - https://github.com/yann-beny/ClaudeMaison
+maintainers:
+  - name: Yann Beny
+keywords:
+  - claudemaison
+  - websocket
+  - streaming
+  - sse

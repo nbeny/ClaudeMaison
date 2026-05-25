@@ -1,0 +1,112 @@
+# Valeurs par défaut du chart tools.
+
+image:
+  repository: ghcr.io/yann-beny/claudemaison/tools
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 2
+
+# gRPC servicer stateless ; les outils builtins sont légers (echo, http_get
+# limité). Si on ajoute des outils CPU-intensives (sandbox exec), remonter.
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+service:
+  type: ClusterIP
+  grpcPort: 5005
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 75
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 100
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: [ALL]
+
+tolerations: []
+nodeSelector: {}
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: tools
+
+# Probes TCP : l'image Day-1 ne ship pas grpc_health_probe. TCP socket
+# vérifie au moins que le port gRPC accepte les connexions. Day-2 :
+# ajouter grpc_health_probe dans le Dockerfile + service Health gRPC,
+# et override probes ici en exec.
+livenessProbe:
+  tcpSocket:
+    port: grpc
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+readinessProbe:
+  tcpSocket:
+    port: grpc
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+terminationGracePeriodSeconds: 30
+
+config:
+  GRPC_HOST: 0.0.0.0
+  GRPC_PORT: "5005"
+  LOG_LEVEL: info
+  OTEL_SERVICE_NAME: tools
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability.svc:4318
+  # Limites des outils. Tighten en prod selon la politique sécurité.
+  TOOL_TIMEOUT_S: "10"
+  HTTP_MAX_BYTES: "1048576"
+
+existingSecret: tools-secrets
+
+serviceMonitor:
+  enabled: false
+  interval: 15s
+  scrapeTimeout: 10s
+  path: /metrics
+  # Si on expose un port HTTP /metrics séparé un jour, le changer ici.
+  port: grpc
+  labels: {}
+
+networkPolicy:
+  enabled: false

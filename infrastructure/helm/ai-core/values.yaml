@@ -1,0 +1,126 @@
+# Valeurs par défaut du chart ai-core.
+
+image:
+  repository: ghcr.io/yann-beny/claudemaison/ai-core
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 2
+
+# Orchestrateur I/O-bound (forward vers inference-router). Memory plus
+# importante pour buffer les contextes en cours (multi-tours).
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 1Gi
+
+service:
+  type: ClusterIP
+  httpPort: 4000
+  grpcPort: 5002
+
+# Interne : edge-api consomme. Pas d'ingress.
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: ai-core.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 100
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: [ALL]
+
+tolerations: []
+nodeSelector: {}
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: ai-core
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Conversations longues : grace period prolongé pour laisser les boucles
+# multi-tours en cours se terminer (sinon SIGKILL coupe le LLM en plein milieu).
+terminationGracePeriodSeconds: 60
+
+config:
+  HTTP_PORT: "4000"
+  GRPC_PORT: "5002"
+  GRPC_HOST: 0.0.0.0
+  LOG_LEVEL: info
+  OTEL_SERVICE_NAME: ai-core
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability.svc:4318
+  # Pointe vers le service inference-router déployé dans le même namespace.
+  LLM_BASE_URL: http://inference-router.claudemaison.svc:4200/v1
+  LLM_TIMEOUT_S: "120"
+  RETRIEVAL_URL: http://retrieval.claudemaison.svc:4100
+
+existingSecret: ai-core-secrets
+
+serviceMonitor:
+  enabled: false
+  interval: 15s
+  scrapeTimeout: 10s
+  path: /metrics
+  port: http
+  labels: {}
+
+networkPolicy:
+  enabled: false
