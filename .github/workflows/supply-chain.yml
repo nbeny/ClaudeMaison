@@ -1,0 +1,152 @@
+name: Supply chain (edge-api)
+
+# Cf. ADR-0012 : Trivy (scan CVE) + Syft (SBOM CycloneDX) + Cosign (keyless,
+# OIDC GitHub → Sigstore Fulcio/Rekor). On signe par digest, jamais par tag,
+# pour éviter le replay sur une image republiée.
+#
+# Pourquoi un workflow séparé du CI : le build d'image prend ~3 min cache à
+# froid, on ne veut pas bloquer la boucle de feedback type-check/test à chaque
+# commit. Triggers restreints aux changements qui impactent l'image.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/edge-api/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/supply-chain.yml"
+  pull_request:
+    paths:
+      - "apps/edge-api/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/supply-chain.yml"
+
+concurrency:
+  group: supply-chain-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/edge-api
+
+jobs:
+  build-scan-sign:
+    name: Build → Trivy → SBOM → Cosign
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push GHCR
+      id-token: write # cosign keyless (OIDC GitHub → Fulcio)
+      security-events: write # upload SARIF Trivy
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # On push GHCR uniquement sur main : les PRs construisent localement pour
+      # scanner, sans publier. Cosign keyless n'a pas de sens sans push (signe
+      # un digest qui existe dans un registre).
+      - name: Login to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/edge-api/Dockerfile
+          push: ${{ github.event_name == 'push' }}
+          load: ${{ github.event_name != 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true # SLSA provenance attestation
+          sbom: true # buildkit SBOM en attestation OCI
+
+      # Trivy scan : fail-on HIGH+CRITICAL. Sur main on upload aussi en SARIF
+      # pour la vue "Security" de GitHub.
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ github.event_name == 'push' && format('{0}/{1}@{2}', env.REGISTRY, env.IMAGE_NAME, steps.build.outputs.digest) || fromJSON(steps.meta.outputs.json).tags[0] }}
+          format: table
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          vuln-type: os,library
+
+      - name: Trivy scan (SARIF for code scanning)
+        if: github.event_name == 'push'
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF
+        if: github.event_name == 'push'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+
+      # SBOM CycloneDX (mandaté par ADR-0012). On l'attache à la release artifact
+      # GHA pour usage hors registre, et on l'attestera côté Cosign juste après.
+      - name: Generate SBOM (Syft, CycloneDX)
+        if: github.event_name == 'push'
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          format: cyclonedx-json
+          output-file: edge-api.cdx.json
+          upload-artifact: true
+          upload-artifact-retention: 30
+
+      # Cosign keyless : signe par digest avec l'OIDC token GHA. Pas de clé
+      # privée à gérer ; la preuve va dans Rekor (transparency log).
+      - name: Install Cosign
+        if: github.event_name == 'push'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image (keyless)
+        if: github.event_name == 'push'
+        run: |
+          cosign sign --yes \
+            "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+
+      - name: Attest SBOM (cosign attest)
+        if: github.event_name == 'push'
+        run: |
+          cosign attest --yes \
+            --predicate edge-api.cdx.json \
+            --type cyclonedx \
+            "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          DIGEST: ${{ steps.build.outputs.digest }}
