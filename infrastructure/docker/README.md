@@ -28,11 +28,11 @@ docker compose -f docker-compose.dev.yml --profile ai up -d
 ## Démarrage des applications (profil `apps`)
 
 Build et démarre les 7 binaires (edge-api, realtime, ai-core, retrieval,
-tools, workers, inference-router). Combiner avec `--profile ai` parce que
-les apps dépendent de NATS / Qdrant :
+tools, workers, inference-router). Le profil `apps` active aussi
+automatiquement Qdrant et NATS dont les binaires dépendent :
 
 ```bash
-docker compose -f docker-compose.dev.yml --profile apps --profile ai up -d --build
+docker compose -f docker-compose.dev.yml --profile apps up -d --build
 ```
 
 Pour itérer sur **un seul binaire**, préférer `pnpm dev` ou `uv run` en

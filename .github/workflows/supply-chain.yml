@@ -1,26 +1,32 @@
-name: Supply chain (edge-api)
+name: Supply chain
 
-# Cf. ADR-0012 : Trivy (scan CVE) + Syft (SBOM CycloneDX) + Cosign (keyless,
-# OIDC GitHub → Sigstore Fulcio/Rekor). On signe par digest, jamais par tag,
-# pour éviter le replay sur une image republiée.
+# Cf. ADR-0012 : pour chaque binaire, Trivy (scan CVE) + Syft (SBOM CycloneDX)
+# + Cosign (keyless, OIDC GitHub → Sigstore Fulcio/Rekor). On signe par digest,
+# jamais par tag, pour éviter le replay sur une image republiée.
 #
-# Pourquoi un workflow séparé du CI : le build d'image prend ~3 min cache à
-# froid, on ne veut pas bloquer la boucle de feedback type-check/test à chaque
-# commit. Triggers restreints aux changements qui impactent l'image.
+# Workflow séparé du CI : le build d'image prend du temps (~3 min cache froid
+# par binaire), on ne veut pas bloquer la boucle de feedback type-check/test.
+# Triggers restreints aux changements qui impactent les images.
 
 on:
   push:
     branches: [main]
     paths:
-      - "apps/edge-api/**"
+      - "apps/**"
       - "package.json"
       - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "tsconfig.base.json"
       - ".github/workflows/supply-chain.yml"
   pull_request:
     paths:
-      - "apps/edge-api/**"
+      - "apps/**"
       - "package.json"
       - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "tsconfig.base.json"
       - ".github/workflows/supply-chain.yml"
 
 concurrency:
@@ -29,17 +35,44 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/edge-api
 
 jobs:
   build-scan-sign:
-    name: Build → Trivy → SBOM → Cosign
+    name: ${{ matrix.app }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write # push GHCR
       id-token: write # cosign keyless (OIDC GitHub → Fulcio)
       security-events: write # upload SARIF Trivy
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Node binaires : contexte = racine du monorepo (pnpm lockfile +
+          # workspace nécessaires au build multi-stage).
+          - app: edge-api
+            context: .
+            dockerfile: apps/edge-api/Dockerfile
+          - app: realtime
+            context: .
+            dockerfile: apps/realtime/Dockerfile
+          # Python binaires : contexte = dossier de l'app (pyproject + src).
+          - app: ai-core
+            context: apps/ai-core
+            dockerfile: apps/ai-core/Dockerfile
+          - app: retrieval
+            context: apps/retrieval
+            dockerfile: apps/retrieval/Dockerfile
+          - app: tools
+            context: apps/tools
+            dockerfile: apps/tools/Dockerfile
+          - app: workers
+            context: apps/workers
+            dockerfile: apps/workers/Dockerfile
+          - app: inference-router
+            context: apps/inference-router
+            dockerfile: apps/inference-router/Dockerfile
     steps:
       - uses: actions/checkout@v4
 
@@ -61,7 +94,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.app }}
           tags: |
             type=sha,format=long
             type=ref,event=branch
@@ -71,14 +104,14 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: apps/edge-api/Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: ${{ github.event_name == 'push' }}
           load: ${{ github.event_name != 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
           provenance: true # SLSA provenance attestation
           sbom: true # buildkit SBOM en attestation OCI
 
@@ -87,7 +120,7 @@ jobs:
       - name: Trivy scan
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: ${{ github.event_name == 'push' && format('{0}/{1}@{2}', env.REGISTRY, env.IMAGE_NAME, steps.build.outputs.digest) || fromJSON(steps.meta.outputs.json).tags[0] }}
+          image-ref: ${{ github.event_name == 'push' && format('{0}/{1}/{2}@{3}', env.REGISTRY, github.repository, matrix.app, steps.build.outputs.digest) || fromJSON(steps.meta.outputs.json).tags[0] }}
           format: table
           exit-code: "1"
           severity: HIGH,CRITICAL
@@ -98,7 +131,7 @@ jobs:
         if: github.event_name == 'push'
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.app }}@${{ steps.build.outputs.digest }}
           format: sarif
           output: trivy-results.sarif
           severity: HIGH,CRITICAL
@@ -109,19 +142,22 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
-          category: trivy
+          # Catégorie par binaire : sinon GitHub fusionne tous les résultats.
+          category: trivy-${{ matrix.app }}
 
-      # SBOM CycloneDX (mandaté par ADR-0012). On l'attache à la release artifact
-      # GHA pour usage hors registre, et on l'attestera côté Cosign juste après.
+      # SBOM CycloneDX (mandaté par ADR-0012). On l'attache à l'artifact GHA
+      # pour usage hors registre, et on l'attestera côté Cosign juste après.
       - name: Generate SBOM (Syft, CycloneDX)
         if: github.event_name == 'push'
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          image: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.app }}@${{ steps.build.outputs.digest }}
           format: cyclonedx-json
-          output-file: edge-api.cdx.json
+          output-file: ${{ matrix.app }}.cdx.json
           upload-artifact: true
           upload-artifact-retention: 30
+          # Nom unique par binaire pour ne pas écraser les autres jobs.
+          artifact-name: sbom-${{ matrix.app }}
 
       # Cosign keyless : signe par digest avec l'OIDC token GHA. Pas de clé
       # privée à gérer ; la preuve va dans Rekor (transparency log).
@@ -133,20 +169,22 @@ jobs:
         if: github.event_name == 'push'
         run: |
           cosign sign --yes \
-            "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+            "${REGISTRY}/${REPO}/${APP}@${DIGEST}"
         env:
           REGISTRY: ${{ env.REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          REPO: ${{ github.repository }}
+          APP: ${{ matrix.app }}
           DIGEST: ${{ steps.build.outputs.digest }}
 
       - name: Attest SBOM (cosign attest)
         if: github.event_name == 'push'
         run: |
           cosign attest --yes \
-            --predicate edge-api.cdx.json \
+            --predicate "${APP}.cdx.json" \
             --type cyclonedx \
-            "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+            "${REGISTRY}/${REPO}/${APP}@${DIGEST}"
         env:
           REGISTRY: ${{ env.REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          REPO: ${{ github.repository }}
+          APP: ${{ matrix.app }}
           DIGEST: ${{ steps.build.outputs.digest }}

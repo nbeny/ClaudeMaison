@@ -47,7 +47,8 @@ services:
     image: qdrant/qdrant:v1.12.4
     container_name: cm-qdrant
     restart: unless-stopped
-    profiles: ["ai", "full"]
+    # `apps` aussi : ai-core et retrieval en dépendent.
+    profiles: ["ai", "apps", "full"]
     ports:
       - "6333:6333"
       - "6334:6334"
@@ -58,7 +59,8 @@ services:
     image: nats:2.10-alpine
     container_name: cm-nats
     restart: unless-stopped
-    profiles: ["ai", "full"]
+    # `apps` aussi : realtime et ai-core publient/consomment des événements.
+    profiles: ["ai", "apps", "full"]
     command: ["-js", "-m", "8222"]
     ports:
       - "4222:4222"
@@ -224,9 +226,10 @@ services:
 
   edge-api:
     image: claudemaison/edge-api:dev
+    # Node binaires : contexte = racine du monorepo (pnpm lockfile + workspace).
     build:
-      context: ../../apps/edge-api
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: apps/edge-api/Dockerfile
     container_name: cm-edge-api
     restart: unless-stopped
     profiles: ["apps", "full"]
@@ -248,8 +251,8 @@ services:
   realtime:
     image: claudemaison/realtime:dev
     build:
-      context: ../../apps/realtime
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: apps/realtime/Dockerfile
     container_name: cm-realtime
     restart: unless-stopped
     profiles: ["apps", "full"]
