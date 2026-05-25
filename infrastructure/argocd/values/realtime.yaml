@@ -1,0 +1,22 @@
+# Override values pour realtime.
+
+image:
+  tag: "" # bumped par CI
+
+ingress:
+  enabled: false
+  # className: nginx
+  # annotations:
+  #   nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+  #   nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  #   nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+  # hosts:
+  #   - host: realtime.claudemaison.io
+  #     paths: [{ path: /, pathType: Prefix }]
+
+networkPolicy:
+  enabled: false
+
+config:
+  # Override si Redis est dans un autre namespace que `data`.
+  REDIS_URL: redis://redis-master.data.svc:6379

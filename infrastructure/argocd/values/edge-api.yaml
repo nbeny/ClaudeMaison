@@ -1,0 +1,31 @@
+# Override values pour edge-api en environnement cible Argo CD.
+# Ce fichier est versionné dans Git et lu par l'ApplicationSet.
+#
+# Champs typiquement bumped par CI :
+#   - image.tag : SHA du commit signé par Cosign.
+#
+# Champs gérés à la main (revue humaine) :
+#   - ingress.hosts, ingress.tls
+#   - resources, autoscaling
+#   - existingSecret (référence à un Secret provisionné par ExternalSecrets)
+
+image:
+  tag: "" # bumped par CI
+
+ingress:
+  enabled: false
+  # className: nginx
+  # hosts:
+  #   - host: api.claudemaison.io
+  #     paths: [{ path: /, pathType: Prefix }]
+  # tls:
+  #   - secretName: edge-api-tls
+  #     hosts: [api.claudemaison.io]
+
+# Activer en prod après installation d'un CNI compatible.
+networkPolicy:
+  enabled: false
+
+# OIDC : activer une fois Keycloak configuré.
+config:
+  OIDC_ENABLED: "false"

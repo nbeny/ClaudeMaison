@@ -1,0 +1,84 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: claudemaison-binaries
+  namespace: argocd
+spec:
+  # Generator "list" : on liste explicitement les 7 binaires. Plus simple
+  # qu'un git/matrix generator pour un set fixe et stable. Quand on ajoutera
+  # un 8e binaire, on l'ajoute ici (et son chart + values).
+  generators:
+    - list:
+        elements:
+          - name: edge-api
+          - name: realtime
+          - name: ai-core
+          - name: retrieval
+          - name: inference-router
+          - name: tools
+          - name: workers
+
+  # Template d'Application instancié pour chaque élément du generator.
+  template:
+    metadata:
+      name: "{{name}}"
+      # Finalizer : à la suppression de l'Application, Argo CD purge les
+      # ressources K8s déployées (sinon elles fuitent).
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+      labels:
+        app.kubernetes.io/part-of: claudemaison
+    spec:
+      project: claudemaison
+
+      source:
+        repoURL: https://github.com/yann-beny/ClaudeMaison.git
+        # HEAD de main : convient pour staging/dev. En prod, pinner sur
+        # un tag de release (`v0.1.0`) ou un SHA pour traçabilité.
+        targetRevision: HEAD
+        path: "infrastructure/helm/{{name}}"
+        helm:
+          # Values override par binaire. Le fichier vit dans ce repo et est
+          # mis à jour par CI (image.tag) + à la main (config infra).
+          valueFiles:
+            - "../../argocd/values/{{name}}.yaml"
+
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: claudemaison
+
+      syncPolicy:
+        # Automated sync : Argo réconcilie en continu. prune supprime ce
+        # qui n'est plus dans Git ; selfHeal écrase les drifts manuels.
+        # Acceptable Day-1 ; en prod multi-tenant, considérer prune=false
+        # et selfHeal=false pour éviter les surprises (sync manuel après
+        # review).
+        automated:
+          prune: true
+          selfHeal: true
+          # allowEmpty=false : si tous les manifests disparaissent, Argo
+          # refuse de tout supprimer (filet de sécurité).
+          allowEmpty: false
+
+        # CreateNamespace : laisse Argo créer `claudemaison` si absente.
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+          # PrunePropagationPolicy=foreground : attend que les ressources
+          # dépendantes soient supprimées avant de marquer la sync OK.
+          - PrunePropagationPolicy=foreground
+
+        retry:
+          limit: 5
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 5m
+
+      # Ignore les diffs sur les champs gérés par les controllers (replicas
+      # sous HPA, etc.) — sinon Argo entre en boucle avec selfHeal=true.
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          jsonPointers:
+            - /spec/replicas

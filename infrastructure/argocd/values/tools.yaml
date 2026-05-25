@@ -1,0 +1,13 @@
+# Override values pour tools.
+
+image:
+  tag: "" # bumped par CI
+
+# En prod : networkPolicy=true + restreindre l'egress de `http_get` à une
+# whitelist (sinon outils accessibles depuis Internet via le binaire).
+networkPolicy:
+  enabled: false
+
+config:
+  TOOL_TIMEOUT_S: "10"
+  HTTP_MAX_BYTES: "1048576"

@@ -1,0 +1,18 @@
+# Override values pour inference-router.
+#
+# ATTENTION : MODEL_BACKENDS doit être renseigné avant le premier déploiement
+# réel, sinon le router renvoie 404 sur chaque modèle et ai-core remonte
+# "modèle indisponible".
+
+image:
+  tag: "" # bumped par CI
+
+networkPolicy:
+  enabled: false
+
+config:
+  # Mapping modèle → backends. Format : "model=url1,url2;model2=url3".
+  # Exemple :
+  #   llama-3.1-8b=http://vllm-llama-8b.llm.svc:8000;mistral-7b=http://vllm-mistral.llm.svc:8000
+  MODEL_BACKENDS: ""
+  REQUEST_TIMEOUT_S: "120"

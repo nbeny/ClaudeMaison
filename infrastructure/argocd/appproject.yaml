@@ -1,0 +1,62 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: claudemaison
+  namespace: argocd
+  # Empêche la suppression accidentelle du projet (laisse les Applications
+  # orphelines visibles plutôt que de tout casser).
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Plateforme ClaudeMaison — 7 binaires applicatifs
+
+  # Restreint d'où vient le code. On n'autorise QUE notre repo : un
+  # contributeur ne peut pas créer une Application pointant ailleurs.
+  sourceRepos:
+    - https://github.com/yann-beny/ClaudeMaison.git
+    - https://github.com/yann-beny/ClaudeMaison
+
+  # Restreint où on déploie. Day-1 : un seul cluster, namespace dédié.
+  # En multi-env (staging/prod), créer un AppProject par cluster cible.
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: claudemaison
+
+  # Cluster-scoped resources autorisées : RBAC minimal, on liste explicitement
+  # plutôt que d'autoriser '*'. Si un chart introduit une CRD ou un
+  # ClusterRoleBinding, ça échouera bruyamment — signal pour revoir.
+  clusterResourceWhitelist: []
+
+  # Namespace-scoped : on autorise tout (Deployment, Service, ConfigMap,
+  # Secret, HPA, PDB, Ingress, NetworkPolicy, ServiceAccount, ServiceMonitor).
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: apps
+      kind: Deployment
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+    - group: policy
+      kind: PodDisruptionBudget
+    - group: networking.k8s.io
+      kind: Ingress
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: monitoring.coreos.com
+      kind: ServiceMonitor
+
+  # Pas de signature requise Day-1 (signed commits). Activer en prod via
+  # configuration globale Argo CD (gpg keyring) puis ajouter ici :
+  # signatureKeys: [{ keyID: "..." }]
+
+  # Fenêtres de sync : aucune restriction Day-1. En prod, on définirait
+  # un blackout pendant les heures de pic ou les freezes release.
+  syncWindows: []
+
+  # Roles RBAC : par défaut, l'accès est régi par le RBAC global Argo CD.
+  # Pas de policy spécifique au projet Day-1.
+  roles: []

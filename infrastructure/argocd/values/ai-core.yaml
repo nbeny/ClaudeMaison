@@ -1,0 +1,13 @@
+# Override values pour ai-core.
+
+image:
+  tag: "" # bumped par CI
+
+networkPolicy:
+  enabled: false
+
+config:
+  # Points d'entrée internes : ajuster si inference-router/retrieval sont
+  # dans un autre namespace.
+  LLM_BASE_URL: http://inference-router.claudemaison.svc:4200/v1
+  RETRIEVAL_URL: http://retrieval.claudemaison.svc:4100

@@ -1,0 +1,13 @@
+# Override values pour retrieval.
+
+image:
+  tag: "" # bumped par CI
+
+networkPolicy:
+  enabled: false
+
+config:
+  # Ajuster si Qdrant est dans un autre namespace ou hors-cluster.
+  QDRANT_URL: http://qdrant.data.svc:6333
+  QDRANT_COLLECTION: claudemaison
+  EMBED_DIM: "384"

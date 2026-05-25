@@ -1,0 +1,15 @@
+# Override values pour workers.
+
+image:
+  tag: "" # bumped par CI
+
+networkPolicy:
+  enabled: false
+
+# Scaling horizontal Day-1 (KEDA Day-2).
+replicaCount: 2
+
+config:
+  REDIS_URL: redis://redis-master.data.svc:6379
+  RETRIEVAL_URL: http://retrieval.claudemaison.svc:4100
+  WORKER_MAX_JOBS: "10"
