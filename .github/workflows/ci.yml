@@ -14,6 +14,8 @@ concurrency:
 env:
   NODE_VERSION: "22"
   PNPM_VERSION: "9.15.0"
+  PYTHON_VERSION: "3.12"
+  UV_VERSION: "0.10.2"
 
 # Pas de job `setup` séparé : `actions/setup-node` + `cache: pnpm` partage le
 # store pnpm entre runs via le cache GitHub Actions, keyé par hash du
@@ -86,10 +88,29 @@ jobs:
           docker pull redis:7-alpine
       - run: pnpm --filter edge-api test:integration
 
+  python:
+    name: Python (ai-core)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/ai-core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - run: uv sync --extra dev --frozen || uv sync --extra dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy src
+      - run: uv run pytest -q
+
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [type-check, unit, lint]
+    needs: [type-check, unit, lint, python]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

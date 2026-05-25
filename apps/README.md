@@ -10,17 +10,17 @@ Chaque sous-dossier correspond à un service logique du document d'architecture
 Six binaires Jour-1 (regroupent les services logiques) — colonne « binaire »
 indique le binaire d'accueil au Jour-1.
 
-| Dossier                 | Binaire Jour-1     | Stack                    | Statut       |
-| ----------------------- | ------------------ | ------------------------ | ------------ |
-| `web/`                  | —                  | Next.js 15 + Apollo      | à créer      |
-| `mobile/`               | —                  | React Native + Expo      | à créer      |
-| `edge-api/`             | edge-api           | NestJS (GraphQL/REST/gRPC) | Day-1 ready  |
-| `realtime/`             | realtime           | Fastify + ws + NATS      | scaffold     |
-| `ai-core/`              | ai-core            | Python + FastAPI         | à créer      |
-| `retrieval/`            | retrieval          | Python                   | à créer      |
-| `tools/`                | tools              | Python + Firecracker     | à créer      |
-| `workers/`              | workers            | Python (Arq)             | à créer      |
-| `inference-router/`     | inference-router   | Python                   | à créer      |
+| Dossier             | Binaire Jour-1   | Stack                      | Statut      |
+| ------------------- | ---------------- | -------------------------- | ----------- |
+| `web/`              | —                | Next.js 15 + Apollo        | à créer     |
+| `mobile/`           | —                | React Native + Expo        | à créer     |
+| `edge-api/`         | edge-api         | NestJS (GraphQL/REST/gRPC) | Day-1 ready |
+| `realtime/`         | realtime         | Fastify + ws + NATS        | scaffold    |
+| `ai-core/`          | ai-core          | Python + FastAPI           | scaffold    |
+| `retrieval/`        | retrieval        | Python                     | à créer     |
+| `tools/`            | tools            | Python + Firecracker       | à créer     |
+| `workers/`          | workers          | Python (Arq)               | à créer     |
+| `inference-router/` | inference-router | Python                     | à créer     |
 
 ## Groupement de déploiement (Jour-1)
 

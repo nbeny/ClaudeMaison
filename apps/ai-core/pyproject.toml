@@ -1,0 +1,83 @@
+[project]
+name = "ai-core"
+version = "0.0.1"
+description = "Binaire ai-core — orchestrator + agent-runtime + memory-service (NestJS edge-api pousse via gRPC, ai-core consomme NATS + Postgres + Qdrant)."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "httpx>=0.28.0",
+    "nats-py>=2.9.0",
+    # gRPC pour exposer les agents aux autres binaires (tools, edge-api).
+    "grpcio>=1.68.0",
+    "grpcio-tools>=1.68.0",
+    "protobuf>=5.29.0",
+    # OTel : on garde la même politique qu'en Node — exports OTLP/HTTP via
+    # le Collector local. Pas d'auto-instrumentation, on choisit les libs.
+    "opentelemetry-api>=1.29.0",
+    "opentelemetry-sdk>=1.29.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.29.0",
+    "opentelemetry-instrumentation-fastapi>=0.50b0",
+    "opentelemetry-instrumentation-httpx>=0.50b0",
+    "opentelemetry-instrumentation-grpc>=0.50b0",
+    # Postgres async pour les usage events / agent runs.
+    "asyncpg>=0.30.0",
+    # Qdrant client pour la mémoire long-terme (RAG côté retrieval, ici on
+    # garde juste un client pour les agents qui veulent du recall direct).
+    "qdrant-client>=1.12.0",
+    # Logging structuré : équivalent pino.
+    "structlog>=24.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.25.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "httpx>=0.28.0", # AsyncClient utilisé dans les tests d'intégration FastAPI
+    "respx>=0.22.0",
+]
+
+[project.scripts]
+ai-core = "ai_core.main:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_core"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# Sélection minimale et utile : pyflakes (F), pycodestyle (E/W), isort (I),
+# bugbear (B), simplify (SIM), pyupgrade (UP). On évite les règles qui font
+# du style pur — Prettier-équivalent pour Python n'existe pas, ruff format
+# s'en occupe (cf. [tool.ruff.format]).
+select = ["E", "W", "F", "I", "B", "SIM", "UP"]
+ignore = [
+    "E501", # line length — laissé à `ruff format`
+]
+
+[tool.ruff.format]
+# Aligne sur les conventions du repo : single quotes, trailing comma.
+quote-style = "single"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+# Les libs OTel n'ont pas toutes des types ; on tolère.
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
