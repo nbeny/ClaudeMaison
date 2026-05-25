@@ -1,0 +1,199 @@
+{
+  // Config Renovate pour ClaudeMaison. Schéma :
+  // https://docs.renovatebot.com/configuration-options/
+  //
+  // Renovate ouvre des PRs pour bumper les deps détectées : npm (workspaces),
+  // pyproject (uv), Dockerfile (FROM), GitHub Actions (uses), Helm. Les
+  // pins de versions d'outils dans `.github/workflows/ci.yml` sont capturés
+  // par un customManager regex en bas du fichier.
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    // Patch + minor regroupés par défaut (réduit le bruit). Les majeurs
+    // restent en PR séparées (review humaine).
+    'group:allNonMajor',
+    // SemVer strict : ne bump pas vers une release non-stable.
+    'helpers:pinGitHubActionDigests',
+    // Active les alertes de sécurité GitHub en PR prioritaire.
+    ':enableVulnerabilityAlertsWithLabel(security)',
+    // Pas de PR le week-end ni la nuit (Paris) : Renovate respecte ce
+    // créneau pour ouvrir/rebase ; les hotfix de sécu passent quand même.
+    ':timezone(Europe/Paris)',
+  ],
+
+  // Horaire d'ouverture des PRs (hors security). Lundi matin tôt : revue
+  // en début de semaine, pas de friction le vendredi.
+  schedule: ['before 7am on monday'],
+
+  // Limites globales : évite l'avalanche de PR le lundi.
+  prConcurrentLimit: 8,
+  prHourlyLimit: 4,
+
+  // Messages de commit alignés sur la convention du repo (cf. .commitlintrc).
+  commitMessagePrefix: 'chore(deps):',
+  semanticCommits: 'disabled', // on gère le préfixe à la main pour rester homogène
+
+  // Labels par défaut sur toutes les PR Renovate.
+  labels: ['dependencies'],
+
+  // Ne pas toucher aux fichiers générés ou aux stubs.
+  ignorePaths: [
+    '**/node_modules/**',
+    '**/.venv/**',
+    'apps/tools/src/tools/generated/**',
+    // Les image.tag dans argocd/values/*.yaml sont injectés par CI
+    // (digest signé). Renovate ne doit pas y toucher.
+    'infrastructure/argocd/values/**',
+  ],
+
+  // Lockfile maintenance : refresh mensuel des locks (pnpm + uv) pour
+  // capturer les fixes transitifs même quand notre direct dep ne bouge pas.
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ['before 7am on the first day of the month'],
+    commitMessageAction: 'Refresh',
+  },
+
+  // Vulnérabilités : PR immédiates avec label `security` (override
+  // schedule et concurrency).
+  vulnerabilityAlerts: {
+    labels: ['security', 'dependencies'],
+    schedule: [],
+  },
+
+  packageRules: [
+    // --- Groupes par écosystème -------------------------------------------------
+
+    {
+      matchManagers: ['npm'],
+      matchUpdateTypes: ['minor', 'patch'],
+      groupName: 'npm (minor+patch)',
+      // pnpm workspaces : Renovate update les `package.json` racine et apps/*.
+    },
+    {
+      matchManagers: ['npm'],
+      matchUpdateTypes: ['major'],
+      // Une PR par major bump : impacts à évaluer manuellement.
+      groupName: null,
+      addLabels: ['major-bump'],
+    },
+
+    {
+      matchManagers: ['pep621'],
+      matchUpdateTypes: ['minor', 'patch'],
+      groupName: 'python (minor+patch)',
+      // pyproject.toml × 5 apps Python (uv).
+    },
+    {
+      matchManagers: ['pep621'],
+      matchUpdateTypes: ['major'],
+      groupName: null,
+      addLabels: ['major-bump'],
+    },
+
+    {
+      matchManagers: ['dockerfile'],
+      matchUpdateTypes: ['minor', 'patch', 'digest'],
+      groupName: 'docker base images',
+      // Pin par digest en sus du tag (déjà fait pour ghcr.io/astral-sh/uv ;
+      // à faire pour node:22-alpine et python:3.12-alpine — voir Day-2).
+    },
+
+    {
+      matchManagers: ['github-actions'],
+      matchUpdateTypes: ['minor', 'patch', 'digest'],
+      groupName: 'github actions',
+    },
+    {
+      matchManagers: ['github-actions'],
+      matchUpdateTypes: ['major'],
+      groupName: null,
+      addLabels: ['major-bump'],
+    },
+
+    // --- Dev dependencies : plus tolérantes ----------------------------------
+
+    {
+      matchDepTypes: ['devDependencies'],
+      matchUpdateTypes: ['minor', 'patch'],
+      groupName: 'devDependencies (minor+patch)',
+      // Auto-merge envisageable Day-2 quand la CI sera stable + branch
+      // protection avec require status checks.
+      automerge: false,
+    },
+
+    // --- Pins critiques : on bloque le major ---------------------------------
+
+    {
+      // NestJS : changement de major = breaking. PR isolée + label spécifique.
+      // Regex slash-delimited (nouveau format Renovate ; remplace matchPackagePatterns).
+      matchPackageNames: ['/^@nestjs//'],
+      matchUpdateTypes: ['major'],
+      addLabels: ['major-bump', 'nestjs'],
+      // Maintainer review obligatoire.
+      reviewers: ['yann-beny'],
+    },
+    {
+      // FastAPI / Pydantic : idem, gros impact runtime.
+      matchPackageNames: ['fastapi', 'pydantic', 'pydantic-settings'],
+      matchUpdateTypes: ['major'],
+      addLabels: ['major-bump', 'python-critical'],
+      reviewers: ['yann-beny'],
+    },
+    {
+      // Node 22 → 24 etc. : revoir avant.
+      matchPackageNames: ['node'],
+      matchUpdateTypes: ['major'],
+      addLabels: ['major-bump', 'runtime'],
+      reviewers: ['yann-beny'],
+    },
+    {
+      // Python image : pareil.
+      matchPackageNames: ['python'],
+      matchUpdateTypes: ['major', 'minor'],
+      addLabels: ['runtime'],
+      reviewers: ['yann-beny'],
+    },
+  ],
+
+  // --- Custom managers : versions d'outils pinnées dans ci.yml -------------
+  // NODE_VERSION / PNPM_VERSION / UV_VERSION sont des `env:` du workflow.
+  // Renovate ne les voit pas par défaut ; ce regex manager les détecte.
+  customManagers: [
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/^\\.github/workflows/.+\\.ya?ml$/'],
+      matchStrings: [
+        // Format : `NODE_VERSION: "22"` → datasource: node, depName: node.
+        'NODE_VERSION:\\s*["\'](?<currentValue>[^"\']+)["\']',
+      ],
+      depNameTemplate: 'node',
+      datasourceTemplate: 'node-version',
+      // On bumpe node uniquement quand le tag image node:22-alpine bouge
+      // côté Docker (cohérence runtime/CI). Renovate gère le rapprochement
+      // via la PR.
+      versioningTemplate: 'node',
+    },
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/^\\.github/workflows/.+\\.ya?ml$/'],
+      matchStrings: [
+        'PNPM_VERSION:\\s*["\'](?<currentValue>[^"\']+)["\']',
+      ],
+      depNameTemplate: 'pnpm',
+      datasourceTemplate: 'npm',
+      versioningTemplate: 'npm',
+    },
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/^\\.github/workflows/.+\\.ya?ml$/'],
+      matchStrings: [
+        'UV_VERSION:\\s*["\'](?<currentValue>[^"\']+)["\']',
+      ],
+      depNameTemplate: 'astral-sh/uv',
+      datasourceTemplate: 'github-releases',
+      // uv versionne en SemVer (0.x.y). Le datasource github-releases est
+      // plus fiable que pypi pour les pre-releases potentielles.
+    },
+  ],
+}
