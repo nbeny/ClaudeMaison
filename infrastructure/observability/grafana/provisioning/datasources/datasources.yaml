@@ -1,0 +1,36 @@
+# Provisioning automatique des datasources au boot de Grafana.
+# Pas de clic UI : tout est versionné dans le repo, idempotent au redémarrage.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    uid: prometheus
+    isDefault: true
+    jsonData:
+      timeInterval: 15s
+      # Lien trace→metrics depuis un panel Prom vers Tempo via exemplars.
+      # Active dès qu'on aura branché les exemplars côté Collector.
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
+
+  - name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    uid: tempo
+    jsonData:
+      # Lien trace→logs : pour brancher Loki en étape 5c, ajouter ici
+      # `tracesToLogsV2` avec datasourceUid: loki.
+      tracesToMetrics:
+        datasourceUid: prometheus
+        spanStartTimeShift: -1m
+        spanEndTimeShift: 1m
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true

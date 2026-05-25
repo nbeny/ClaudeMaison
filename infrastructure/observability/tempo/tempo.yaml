@@ -1,0 +1,44 @@
+# Configuration Tempo — mode monolithic (un seul binaire avec tous les rôles).
+# Adapté au dev et à des charges modestes ; en prod on passera au mode
+# microservices (distributor / ingester / querier / compactor séparés).
+#
+# Backend de stockage : local FS (volume Docker). En prod ce sera S3/MinIO
+# avec la même config (juste `backend: s3` au lieu de `local`).
+
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9095
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+ingester:
+  # Flush vers le storage backend toutes les 30s, ou dès qu'un bloc atteint
+  # max_block_bytes. Valeurs basses pour voir les traces rapidement en dev.
+  max_block_duration: 30s
+  max_block_bytes: 10_000_000
+
+compactor:
+  compaction:
+    # On garde les traces 24h en dev — largement suffisant pour debugger
+    # localement, et on n'écrase pas le disque.
+    block_retention: 24h
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/blocks
+    wal:
+      path: /var/tempo/wal
+    pool:
+      max_workers: 10
+      queue_depth: 1000
+
+usage_report:
+  # Désactivation explicite : pas de phone-home Grafana Labs (souveraineté).
+  reporting_enabled: false

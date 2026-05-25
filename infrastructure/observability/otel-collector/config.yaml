@@ -1,0 +1,78 @@
+# Configuration OpenTelemetry Collector — profil "obs" dev local.
+#
+# Pipeline :
+#   binaires --(OTLP gRPC 4317 ou HTTP 4318)--> Collector --> {Prometheus, Tempo}
+#
+# Le Collector centralise pour :
+#   - factoriser le batching/retry côté infra (les binaires n'ont pas à se
+#     soucier de la disponibilité du backend),
+#   - permettre de changer de backend sans toucher au code applicatif,
+#   - filtrer/redacter avant export si besoin (PII, headers sensibles).
+#
+# En prod ce fichier sera remplacé par une config managée (Helm values), mais
+# la forme reste identique : on garde un Collector quel que soit l'environnement.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Protection mémoire avant que le process ne se fasse OOM-killed.
+  # 80% soft / 90% hard de la limite container. Si on tape le hard limit,
+  # le Collector commence à dropper proprement plutôt que de crasher.
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 90
+    spike_limit_percentage: 20
+
+  # Batching avant export : réduit le nombre de RPC/HTTP vers les backends.
+  # Les valeurs sont conservatrices pour le dev (latence faible visible dans
+  # Grafana). En prod on monterait `timeout` à 5s et `send_batch_size` à 8192.
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+
+exporters:
+  # Métriques : on expose un endpoint /metrics scrape-able par Prometheus.
+  # Pas de remote_write — Prom scrape, c'est plus simple à debugger et c'est
+  # le pattern par défaut de l'écosystème.
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # Préserve les attributs OTel comme labels Prom. send_timestamps évite
+    # les sauts de timeline quand le scrape interval ne s'aligne pas sur
+    # le push interval du SDK (15s côté edge-api).
+    send_timestamps: true
+    metric_expiration: 5m
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Traces : OTLP gRPC vers Tempo. Tempo ne supporte que la réception OTLP,
+  # donc on garde le format natif jusqu'au backend (zéro conversion).
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  # Debug exporter : pratique pour voir ce qui transite quand on suspecte
+  # un problème de pipeline. `verbosity: basic` log juste un résumé par batch.
+  debug:
+    verbosity: basic
+
+service:
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo, debug]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus, debug]

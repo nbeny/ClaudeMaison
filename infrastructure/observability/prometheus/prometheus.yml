@@ -1,0 +1,28 @@
+# Configuration Prometheus — profil "obs" dev.
+#
+# On scrape uniquement le OTel Collector : c'est lui qui agrège les métriques
+# OTLP push depuis les binaires et les ré-expose en format Prometheus. Pas de
+# scrape direct des apps (les apps poussent en OTLP, point).
+#
+# external_labels : utile quand plusieurs clusters Prometheus se fédèrent.
+# Inutile Jour-1 mais on garde la convention pour éviter un rename plus tard.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: dev-local
+    monitor: claudemaison
+
+scrape_configs:
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8889"]
+        labels:
+          service_group: infra
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          service_group: infra

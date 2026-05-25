@@ -157,11 +157,17 @@ Toutes les variables d'environnement sont **validées au boot** par un schéma Z
 - Resource attrs : `service.name=edge-api`, `service.version=$GIT_COMMIT`, `deployment.environment.name=$NODE_ENV`.
 - Shutdown propre : `SIGTERM`/`SIGINT` flush le SDK avant la sortie du process.
 
-### 8.2 Stack de collecte (étape 5b — à venir)
+### 8.2 Stack de collecte (étape 5b)
 
-- OpenTelemetry Collector déployé côté plateforme, profil pipeline traces + metrics → Tempo + Mimir (ou Prometheus + Jaeger).
-- Dashboards Grafana versionnés dans `infrastructure/observability/grafana/` (golden signals + métriques métier ci-dessus).
-- Healthchecks `/ready` vérifient Postgres (`SELECT 1`) + Redis (`PING`) via `@nestjs/terminus`.
+- **OTel Collector** (image `otel/opentelemetry-collector-contrib`) reçoit l'OTLP des binaires (gRPC 4317 / HTTP 4318), batche, applique un memory_limiter, puis route :
+  - métriques → endpoint Prometheus (`:8889`) scrape-able,
+  - traces → Tempo via OTLP gRPC.
+- **Prometheus** (mono-process, image officielle) scrape le Collector toutes les 15 s. Rétention 72 h en dev, 30 j+ en prod. Migration vers **Mimir** prévue si on dépasse ~1 M séries actives.
+- **Tempo** en mode monolithic, storage local en dev / S3-compatible (MinIO) en prod. Rétention 24 h dev, 7 j prod (échantillonnage tail-based à introduire si volume).
+- **Grafana** avec provisioning datasources + dashboards versionnés dans `infrastructure/observability/grafana/`. Dashboard `edge-api — Vue d'ensemble` couvre les 3 métriques métier (auth attempts, quota checks, usage events recorded). Anonymous admin en dev uniquement ; en prod, derrière Keycloak SSO.
+- Téléphone-maison désactivé partout (`reporting_enabled: false` Tempo, `GF_ANALYTICS_*` Grafana) — exigence souveraineté.
+- Opt-in via Docker Compose profile `obs` : `docker compose --profile obs up -d` n'allume la stack que sur demande (≈600 Mo RAM combinés).
+- Healthchecks applicatifs : `/ready` vérifie Postgres (`SELECT 1`) + Redis (`PING`) via `@nestjs/terminus`.
 
 ## 9. Stratégie de tests
 
@@ -182,7 +188,7 @@ Toutes les variables d'environnement sont **validées au boot** par un schéma Z
 | 3 | Module `auth` : OIDC Authorization Code Flow + Keycloak self-hosted en compose | **fait** |
 | 4 | Module `billing` : plans, quotas, `usage_events`, intégration gRPC pour écriture depuis `ai-core` | **fait** |
 | 5a | OTel SDK + instrumentations sélectives + métriques custom dans le binaire | **fait** |
-| 5b | Stack de collecte : OTel Collector, backend traces/metrics, dashboards Grafana versionnés | à venir |
+| 5b | Stack de collecte : OTel Collector + Prometheus + Tempo + Grafana avec dashboards versionnés (profile compose `obs`) | **fait** |
 | 6 | Tests d'intégration Testcontainers + CI pipeline | à venir |
 
 ## 11. Critères de "Done" pour le binaire Jour-1

@@ -1,0 +1,16 @@
+# Provisioner Grafana : pointe vers un dossier de JSON dashboards qui sera
+# rescannéen continu. Modifier un JSON → reload auto à intervalle `updateIntervalSeconds`.
+
+apiVersion: 1
+
+providers:
+  - name: claudemaison
+    orgId: 1
+    folder: ClaudeMaison
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true

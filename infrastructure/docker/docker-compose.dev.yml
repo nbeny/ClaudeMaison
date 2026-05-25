@@ -116,6 +116,100 @@ services:
       retries: 30
       start_period: 30s
 
+  # Stack d'observabilité opt-in via `--profile obs`.
+  # ~600 Mo RAM combinés, ~10s au boot. Inutile pour la majorité des sessions
+  # de dev qui n'inspectent pas les métriques/traces ; quand on en a besoin
+  # on lance `docker compose --profile obs up -d` et l'edge-api en local
+  # exporte vers le Collector via OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.114.0
+    container_name: cm-otel-collector
+    restart: unless-stopped
+    profiles: ["obs", "full"]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ../observability/otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      # OTLP gRPC pour les binaires Node/Go.
+      - "4317:4317"
+      # OTLP HTTP — c'est ce que utilise edge-api côté SDK Node (proto/HTTP).
+      - "4318:4318"
+      # Endpoint Prometheus exposé par le Collector (scrape par Prom).
+      - "8889:8889"
+    depends_on:
+      tempo:
+        condition: service_started
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    container_name: cm-prometheus
+    restart: unless-stopped
+    profiles: ["obs", "full"]
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=72h"
+      - "--web.enable-remote-write-receiver"
+    volumes:
+      - ../observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: cm-tempo
+    restart: unless-stopped
+    profiles: ["obs", "full"]
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    user: "0:0"  # Tempo a besoin d'écrire dans /var/tempo (volume root par défaut).
+    volumes:
+      - ../observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      # API HTTP (query, push tempo-cli).
+      - "3200:3200"
+      # OTLP gRPC interne (ports exposés par le Collector → Tempo, pas par les apps).
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3200/ready || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: cm-grafana
+    restart: unless-stopped
+    profiles: ["obs", "full"]
+    environment:
+      # Dev only : pas d'auth, on ouvre direct. À ne JAMAIS reproduire en prod.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: dark
+      GF_INSTALL_PLUGINS: ""
+      # Désactive le phone-home Grafana (souveraineté).
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+    volumes:
+      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"  # 3000 est pris par edge-api en dev local.
+    depends_on:
+      prometheus:
+        condition: service_started
+      tempo:
+        condition: service_started
+
 volumes:
   postgres-data:
   redis-data:
@@ -123,3 +217,6 @@ volumes:
   nats-data:
   minio-data:
   keycloak-data:
+  prometheus-data:
+  tempo-data:
+  grafana-data:
