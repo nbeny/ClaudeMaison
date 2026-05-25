@@ -214,6 +214,152 @@ services:
       tempo:
         condition: service_started
 
+  # ===========================================================================
+  # Applications (profil `apps`).
+  # Opt-in : `docker compose --profile apps --profile ai up`. Pour un développeur
+  # qui itère sur un seul binaire, faire tourner ce binaire en `pnpm dev` /
+  # `uv run` localement et n'utiliser ce profil que pour les démos / smoke E2E.
+  # Les images sont buildées à partir des Dockerfiles du repo (pas de pull).
+  # ===========================================================================
+
+  edge-api:
+    image: claudemaison/edge-api:dev
+    build:
+      context: ../../apps/edge-api
+      dockerfile: Dockerfile
+    container_name: cm-edge-api
+    restart: unless-stopped
+    profiles: ["apps", "full"]
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-claudemaison}:${POSTGRES_PASSWORD:-claudemaison}@postgres:5432/${POSTGRES_DB:-claudemaison}
+      REDIS_URL: redis://redis:6379/0
+      AI_CORE_GRPC_URL: ai-core:5002
+    ports:
+      - "3000:3000"
+      - "5001:5001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  realtime:
+    image: claudemaison/realtime:dev
+    build:
+      context: ../../apps/realtime
+      dockerfile: Dockerfile
+    container_name: cm-realtime
+    restart: unless-stopped
+    profiles: ["apps", "full"]
+    environment:
+      NODE_ENV: development
+      HTTP_PORT: 3100
+      NATS_URL: nats://nats:4222
+    ports:
+      - "3100:3100"
+    depends_on:
+      nats:
+        condition: service_started
+
+  ai-core:
+    image: claudemaison/ai-core:dev
+    build:
+      context: ../../apps/ai-core
+      dockerfile: Dockerfile
+    container_name: cm-ai-core
+    restart: unless-stopped
+    profiles: ["apps", "full"]
+    environment:
+      NODE_ENV: development
+      HTTP_PORT: 4000
+      GRPC_PORT: 5002
+      DATABASE_URL: postgresql://${POSTGRES_USER:-claudemaison}:${POSTGRES_PASSWORD:-claudemaison}@postgres:5432/${POSTGRES_DB:-claudemaison}
+      NATS_URL: nats://nats:4222
+      QDRANT_URL: http://qdrant:6333
+      LLM_BASE_URL: http://inference-router:4200/v1
+    ports:
+      - "4000:4000"
+      - "5002:5002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      qdrant:
+        condition: service_started
+      inference-router:
+        condition: service_started
+
+  retrieval:
+    image: claudemaison/retrieval:dev
+    build:
+      context: ../../apps/retrieval
+      dockerfile: Dockerfile
+    container_name: cm-retrieval
+    restart: unless-stopped
+    profiles: ["apps", "full"]
+    environment:
+      NODE_ENV: development
+      HTTP_PORT: 4100
+      QDRANT_URL: http://qdrant:6333
+    ports:
+      - "4100:4100"
+    depends_on:
+      qdrant:
+        condition: service_started
+
+  tools:
+    image: claudemaison/tools:dev
+    build:
+      context: ../../apps/tools
+      dockerfile: Dockerfile
+    container_name: cm-tools
+    restart: unless-stopped
+    profiles: ["apps", "full"]
+    environment:
+      NODE_ENV: development
+      GRPC_PORT: 5005
+    ports:
+      - "5005:5005"
+
+  workers:
+    image: claudemaison/workers:dev
+    build:
+      context: ../../apps/workers
+      dockerfile: Dockerfile
+    container_name: cm-workers
+    restart: unless-stopped
+    profiles: ["apps", "full"]
+    environment:
+      NODE_ENV: development
+      REDIS_URL: redis://redis:6379/0
+      RETRIEVAL_URL: http://retrieval:4100
+    depends_on:
+      redis:
+        condition: service_healthy
+      retrieval:
+        condition: service_started
+
+  inference-router:
+    image: claudemaison/inference-router:dev
+    build:
+      context: ../../apps/inference-router
+      dockerfile: Dockerfile
+    container_name: cm-inference-router
+    restart: unless-stopped
+    profiles: ["apps", "full"]
+    environment:
+      NODE_ENV: development
+      HTTP_PORT: 4200
+      # En dev sans backend LLM réel, on laisse vide → /v1/models renvoie []
+      # et toute requête de complétion renvoie 404. Pour pointer vers Ollama :
+      # MODEL_BACKENDS=mistral-large-instruct=http://host.docker.internal:11434
+      MODEL_BACKENDS: ${MODEL_BACKENDS:-}
+    ports:
+      - "4200:4200"
+
 volumes:
   postgres-data:
   redis-data:

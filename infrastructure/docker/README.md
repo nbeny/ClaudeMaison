@@ -25,6 +25,22 @@ Active le profil `ai` pour Qdrant + NATS + MinIO :
 docker compose -f docker-compose.dev.yml --profile ai up -d
 ```
 
+## Démarrage des applications (profil `apps`)
+
+Build et démarre les 7 binaires (edge-api, realtime, ai-core, retrieval,
+tools, workers, inference-router). Combiner avec `--profile ai` parce que
+les apps dépendent de NATS / Qdrant :
+
+```bash
+docker compose -f docker-compose.dev.yml --profile apps --profile ai up -d --build
+```
+
+Pour itérer sur **un seul binaire**, préférer `pnpm dev` ou `uv run` en
+local plutôt que rebuilder l'image à chaque modif — le profil `apps` est
+là pour les démos et smoke E2E.
+
+Le raccourci `--profile full` active tout : `apps`, `ai`, `oidc`, `obs`.
+
 ## Arrêt
 
 ```bash
@@ -34,15 +50,22 @@ docker compose -f docker-compose.dev.yml down -v         # arrête ET supprime l
 
 ## Ports exposés en local
 
-| Service           | Port hôte | Identifiants par défaut                             |
-| ----------------- | --------- | --------------------------------------------------- |
-| Postgres          | 5432      | `claudemaison` / `claudemaison` / db `claudemaison` |
-| Redis             | 6379      | — (sans mot de passe en dev)                        |
-| Qdrant (HTTP)     | 6333      | —                                                   |
-| Qdrant (gRPC)     | 6334      | —                                                   |
-| NATS (client)     | 4222      | —                                                   |
-| NATS (monitoring) | 8222      | —                                                   |
-| MinIO (API)       | 9000      | `minioadmin` / `minioadmin`                         |
-| MinIO (console)   | 9001      | `minioadmin` / `minioadmin`                         |
+| Service              | Port hôte   | Identifiants / notes                                |
+| -------------------- | ----------- | --------------------------------------------------- |
+| Postgres             | 5432        | `claudemaison` / `claudemaison` / db `claudemaison` |
+| Redis                | 6379        | — (sans mot de passe en dev)                        |
+| Qdrant               | 6333 / 6334 | HTTP / gRPC                                         |
+| NATS                 | 4222 / 8222 | client / monitoring                                 |
+| MinIO                | 9000 / 9001 | `minioadmin` / `minioadmin` (API / console)         |
+| Keycloak             | 8080        | profil `oidc` — `admin` / `admin`                   |
+| edge-api             | 3000 / 5001 | profil `apps` — HTTP / gRPC                         |
+| realtime             | 3100        | profil `apps` — HTTP + WS                           |
+| ai-core              | 4000 / 5002 | profil `apps` — HTTP / gRPC                         |
+| retrieval            | 4100        | profil `apps`                                       |
+| tools                | 5005        | profil `apps` — gRPC                                |
+| inference-router     | 4200        | profil `apps`                                       |
+| Grafana              | 3001        | profil `obs` — anonyme (dev only)                   |
+| Prometheus           | 9090        | profil `obs`                                        |
+| OTel Collector       | 4317 / 4318 | profil `obs` — gRPC / HTTP                          |
 
 Ces identifiants sont **uniquement pour le développement local**. Jamais en staging ou prod (Vault).
