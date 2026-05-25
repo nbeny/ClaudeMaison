@@ -1,0 +1,6 @@
+# Stubs gRPC générés par scripts/gen-proto.sh.
+# CI et Dockerfile les régénèrent ; le fichier __init__.py reste suivi pour
+# que le package soit importable avant la première génération.
+src/tools/generated/tools_pb2.py
+src/tools/generated/tools_pb2.pyi
+src/tools/generated/tools_pb2_grpc.py

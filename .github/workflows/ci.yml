@@ -89,11 +89,15 @@ jobs:
       - run: pnpm --filter edge-api test:integration
 
   python:
-    name: Python (ai-core)
+    name: Python (${{ matrix.app }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [ai-core, retrieval, tools, workers, inference-router]
     defaults:
       run:
-        working-directory: apps/ai-core
+        working-directory: apps/${{ matrix.app }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
@@ -102,6 +106,10 @@ jobs:
           enable-cache: true
       - run: uv python install ${{ env.PYTHON_VERSION }}
       - run: uv sync --extra dev --frozen || uv sync --extra dev
+      # tools doit générer ses stubs gRPC avant lint/typecheck/test.
+      - name: Generate gRPC stubs
+        if: matrix.app == 'tools'
+        run: uv run bash scripts/gen-proto.sh
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy src

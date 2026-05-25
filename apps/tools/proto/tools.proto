@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package tools.v1;
+
+// Service d'exécution d'outils.
+// L'orchestrateur appelle ExecuteTool ; le serveur exécute l'outil et renvoie
+// son résultat encodé en JSON (string). Plus tard, le runtime sera Firecracker.
+service ToolService {
+  rpc ExecuteTool(ExecuteToolRequest) returns (ExecuteToolResponse);
+  rpc ListTools(ListToolsRequest) returns (ListToolsResponse);
+}
+
+message ExecuteToolRequest {
+  string tool_name = 1;
+  // Arguments encodés en JSON (objet). On évite Struct pour rester simple.
+  string arguments_json = 2;
+  // Identifiants pour traçabilité / quota.
+  string workspace_id = 3;
+  string user_id = 4;
+  string turn_id = 5;
+}
+
+message ExecuteToolResponse {
+  // "ok" ou "error". Tout résultat structuré passe par result_json.
+  string status = 1;
+  string result_json = 2;
+  string error_message = 3;
+  // Temps écoulé côté serveur, utile pour métriques côté appelant.
+  double duration_ms = 4;
+}
+
+message ListToolsRequest {}
+
+message ListToolsResponse {
+  repeated ToolDescriptor tools = 1;
+}
+
+message ToolDescriptor {
+  string name = 1;
+  string description = 2;
+  // JSON Schema des arguments. L'orchestrateur le passe au LLM.
+  string arguments_schema_json = 3;
+}
