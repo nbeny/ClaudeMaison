@@ -188,3 +188,86 @@ jobs:
           REPO: ${{ github.repository }}
           APP: ${{ matrix.app }}
           DIGEST: ${{ steps.build.outputs.digest }}
+
+  # GitOps : une fois les 7 images buildées, scannées et signées, ouvre une PR
+  # qui bumpe `image.tag` dans `infrastructure/argocd/values/<bin>.yaml`. Argo
+  # CD synchronise après merge.
+  #
+  # Pourquoi une PR plutôt qu'un commit direct :
+  #   - Audit trail : qui a déployé quoi, quand, via quelle review.
+  #   - Compatible avec une branch protection stricte sur main.
+  #   - Permet une fenêtre de relecture (smoke tests, change window).
+  #
+  # Pourquoi pas de boucle CI : `paths:` de ce workflow n'inclut pas
+  # `infrastructure/argocd/values/**`, donc le merge de la PR ne re-déclenche
+  # pas supply-chain. ci.yml ne build pas d'images.
+  bump-argocd-values:
+    name: Bump argocd values (image tags)
+    runs-on: ubuntu-latest
+    needs: build-scan-sign
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pourquoi sed plutôt que yq : préserve les lignes vides et l'ordre des
+      # clés, donc le diff PR ne montre QUE le bump (pas de reformatage). Le
+      # pattern `^  tag: "..."` est unique dans ces fichiers d'override (un
+      # seul `image.tag` par values, pas de bloc resources/limits avec `tag:`).
+      - name: Bump image.tag dans tous les values argocd
+        env:
+          # Le format `sha-<longsha>` correspond à `type=sha,format=long`
+          # configuré dans docker/metadata-action ci-dessus. Source unique de
+          # vérité : github.sha.
+          TAG: sha-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for app in edge-api realtime ai-core retrieval tools workers inference-router; do
+            file="infrastructure/argocd/values/${app}.yaml"
+            sed -i -E "s|^(  tag: \")[^\"]*(\")|\1${TAG}\2|" "$file"
+            # Garde-fou : la ligne attendue doit exister après remplacement.
+            grep -qE "^  tag: \"${TAG}\"" "$file" || {
+              echo "ERREUR : pattern image.tag introuvable dans ${file}" >&2
+              exit 1
+            }
+            echo "Bumped ${file} → ${TAG}"
+          done
+
+      - name: Create PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore(deploy): bump image.tag → sha-${{ github.sha }}"
+          title: "chore(deploy): bump image.tag → ${{ github.sha }}"
+          body: |
+            Bump auto-déclenché par supply-chain.yml après build + scan Trivy + sign Cosign keyless.
+
+            Images signées par digest (tag `sha-${{ github.sha }}` est un alias) :
+
+            - `ghcr.io/${{ github.repository }}/edge-api`
+            - `ghcr.io/${{ github.repository }}/realtime`
+            - `ghcr.io/${{ github.repository }}/ai-core`
+            - `ghcr.io/${{ github.repository }}/retrieval`
+            - `ghcr.io/${{ github.repository }}/tools`
+            - `ghcr.io/${{ github.repository }}/workers`
+            - `ghcr.io/${{ github.repository }}/inference-router`
+
+            Vérifier la signature avant merge :
+
+            ```
+            cosign verify \
+              --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/supply-chain.yml@.*" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+              ghcr.io/${{ github.repository }}/<bin>:sha-${{ github.sha }}
+            ```
+
+            Argo CD synchronisera après merge (Application `<bin>`, source
+            `infrastructure/helm/<bin>` + values `infrastructure/argocd/values/<bin>.yaml`).
+          branch: deploy/bump-${{ github.sha }}
+          delete-branch: true
+          labels: |
+            deploy
+            automated
+          # Signe le commit avec la clé du bot GitHub Actions (vérifié).
+          sign-commits: true
