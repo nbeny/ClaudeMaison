@@ -171,12 +171,18 @@ Toutes les variables d'environnement sont **validées au boot** par un schéma Z
 
 ## 9. Stratégie de tests
 
-| Niveau | Outil | Cible |
-|---|---|---|
-| Unitaire | Vitest | services, helpers (>80 % couvert) |
-| Intégration | Vitest + Testcontainers (Postgres + Redis éphémères) | modules complets, schémas, contrats GraphQL |
-| Contrat | Pact ou snapshot du schéma GraphQL | détection breaking change |
-| E2E | Playwright (depuis `apps/web`) | parcours utilisateur réel |
+| Niveau | Outil | Cible | État |
+|---|---|---|---|
+| Unitaire | Vitest | services, helpers | en place (18 tests) |
+| Intégration | Vitest + testcontainers (Postgres + Redis éphémères) | repos + services contre vraie DB | en place (10 tests : auth signup/refresh/chaîne révoquée, billing idempotence, quota free/active sub) |
+| Contrat | Pact ou snapshot du schéma GraphQL | détection breaking change | à venir |
+| E2E | Playwright (depuis `apps/web`) | parcours utilisateur réel | à venir |
+
+Les tests d'intégration tournent via `pnpm --filter edge-api test:integration` :
+testcontainers démarre les services pour la durée de la run, partagés entre fichiers
+(`fileParallelism: false`). Le schéma `infrastructure/db/schema.sql` est copié dans
+`/docker-entrypoint-initdb.d/` du container Postgres — toute évolution du schéma
+est donc testée automatiquement.
 
 ## 10. Plan d'implémentation incrémental
 
@@ -189,7 +195,7 @@ Toutes les variables d'environnement sont **validées au boot** par un schéma Z
 | 4 | Module `billing` : plans, quotas, `usage_events`, intégration gRPC pour écriture depuis `ai-core` | **fait** |
 | 5a | OTel SDK + instrumentations sélectives + métriques custom dans le binaire | **fait** |
 | 5b | Stack de collecte : OTel Collector + Prometheus + Tempo + Grafana avec dashboards versionnés (profile compose `obs`) | **fait** |
-| 6 | Tests d'intégration Testcontainers + CI pipeline | à venir |
+| 6 | Tests d'intégration testcontainers (auth + billing) + pipeline GitHub Actions (type-check, unit, integration, build) | **fait** |
 
 ## 11. Critères de "Done" pour le binaire Jour-1
 

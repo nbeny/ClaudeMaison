@@ -31,6 +31,22 @@ Le service écoute sur `http://localhost:3000` :
 - `GET /ready` — readiness (vérifie Postgres + Redis)
 - `POST /graphql` — endpoint GraphQL (UI Apollo à `/graphql` en dev)
 
+## Tests
+
+```bash
+# Tests unitaires (Vitest, ~3s)
+pnpm --filter edge-api test
+
+# Tests d'intégration (testcontainers, Docker requis, ~15s)
+pnpm --filter edge-api test:integration
+```
+
+Les tests d'intégration démarrent un Postgres + Redis éphémères via
+testcontainers, appliquent le `schema.sql` au boot, et vérifient les
+parcours auth (signup/refresh/réutilisation détectée) et billing (idempotence
+des usage_events, calcul de quota). Docker Desktop (ou daemon Linux)
+doit être disponible.
+
 ## Build production
 
 ```bash
