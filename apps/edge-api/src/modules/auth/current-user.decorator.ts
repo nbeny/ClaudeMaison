@@ -10,9 +10,7 @@ export const CurrentUser = createParamDecorator(
         ? GqlExecutionContext.create(ctx).getContext().req
         : ctx.switchToHttp().getRequest();
     if (!req.user) {
-      throw new Error(
-        '@CurrentUser() utilisé sans JwtAuthGuard préalable — incohérent.',
-      );
+      throw new Error('@CurrentUser() utilisé sans JwtAuthGuard préalable — incohérent.');
     }
     return req.user;
   },

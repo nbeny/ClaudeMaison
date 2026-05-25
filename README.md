@@ -27,12 +27,12 @@ ClaudeMaison/
 
 ## Outillage requis
 
-| Outil | Version | Source |
-|---|---|---|
-| Node.js | 22.11+ | `.nvmrc` |
-| pnpm | 9.15+ | `package.json` (`packageManager`) |
-| Python | 3.12 | `.python-version` |
-| Turborepo | 2.3+ | `devDependencies` |
+| Outil     | Version | Source                            |
+| --------- | ------- | --------------------------------- |
+| Node.js   | 22.11+  | `.nvmrc`                          |
+| pnpm      | 9.15+   | `package.json` (`packageManager`) |
+| Python    | 3.12    | `.python-version`                 |
+| Turborepo | 2.3+    | `devDependencies`                 |
 
 Installation initiale (à exécuter une fois les premières apps créées) :
 

@@ -48,7 +48,9 @@ export class OidcController {
     this.redirectUri = config.get('OIDC_REDIRECT_URI', { infer: true })!;
     const origins = config.get('ALLOWED_ORIGINS', { infer: true });
     this.postLoginRedirect =
-      config.get('OIDC_POST_LOGIN_REDIRECT', { infer: true }) ?? origins[0] ?? 'http://localhost:3001';
+      config.get('OIDC_POST_LOGIN_REDIRECT', { infer: true }) ??
+      origins[0] ??
+      'http://localhost:3001';
   }
 
   /**
@@ -104,7 +106,9 @@ export class OidcController {
     @Res() reply: FastifyReply,
   ): Promise<void> {
     if (error) {
-      this.logger.warn(`Callback OIDC en erreur : ${error} — ${errorDescription ?? '(no description)'}`);
+      this.logger.warn(
+        `Callback OIDC en erreur : ${error} — ${errorDescription ?? '(no description)'}`,
+      );
       throw new UnauthorizedException(`OIDC: ${error}`);
     }
     if (!code || !state) {
@@ -123,7 +127,9 @@ export class OidcController {
 
     const email = typeof claims.email === 'string' ? claims.email : undefined;
     if (!email) {
-      throw new UnauthorizedException('ID token sans claim `email` — impossible de créer le compte.');
+      throw new UnauthorizedException(
+        'ID token sans claim `email` — impossible de créer le compte.',
+      );
     }
     if (claims.email_verified === false) {
       // On refuse les emails non vérifiés : sinon n'importe qui pourrait
@@ -146,7 +152,9 @@ export class OidcController {
     const fragment = new URLSearchParams({
       access_token: issued.accessToken,
       refresh_token: issued.refreshToken,
-      expires_in: Math.floor((issued.accessTokenExpiresAt.getTime() - Date.now()) / 1000).toString(),
+      expires_in: Math.floor(
+        (issued.accessTokenExpiresAt.getTime() - Date.now()) / 1000,
+      ).toString(),
     });
     target.hash = fragment.toString();
     await reply.redirect(target.toString(), 302);
@@ -194,7 +202,12 @@ export class OidcController {
     if (typeof payload.sub !== 'string') {
       throw new UnauthorizedException('ID token sans `sub`.');
     }
-    return payload as { sub: string; email?: string; email_verified?: boolean; nonce?: string };
+    return payload as {
+      sub: string;
+      email?: string;
+      email_verified?: boolean;
+      nonce?: string;
+    };
   }
 
   /**

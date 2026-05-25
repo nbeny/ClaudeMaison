@@ -6,7 +6,7 @@ Accepté — 2026-05-24
 
 ## Contexte
 
-Cible de marché : utilisateurs et entreprises européens soumis au RGPD et à l'AI Act, secteurs régulés (santé, finance, défense, public). Les services hébergés aux États-Unis sont exposés au *CLOUD Act* et au *FISA §702*, ce qui pose des problèmes contractuels et réglementaires majeurs pour beaucoup de prospects EU.
+Cible de marché : utilisateurs et entreprises européens soumis au RGPD et à l'AI Act, secteurs régulés (santé, finance, défense, public). Les services hébergés aux États-Unis sont exposés au _CLOUD Act_ et au _FISA §702_, ce qui pose des problèmes contractuels et réglementaires majeurs pour beaucoup de prospects EU.
 
 ## Décision
 
@@ -28,15 +28,18 @@ Cible de marché : utilisateurs et entreprises européens soumis au RGPD et à l
 ## Conséquences
 
 **Positives** :
+
 - Argument commercial clair pour le marché EU régulé.
 - Conformité RGPD et AI Act simplifiée.
 - Coûts d'inférence souvent inférieurs aux hyperscalers US (pas d'egress, GPU loués moins chers).
 
 **Négatives** :
+
 - Disponibilité GPU H100 plus rare en EU qu'aux US.
 - Pas d'accès aux modèles frontière fermés (Claude, GPT-4) → on dépend de l'écosystème ouvert.
 - Quelques services SaaS courants (Datadog, Vercel, Auth0) sont exclus → on les remplace par leurs équivalents auto-hébergés.
 
 **Engagements** :
+
 - Revue annuelle des fournisseurs pour vérifier qu'aucun n'est passé sous juridiction US.
 - Procédures de réversibilité par fournisseur documentées.

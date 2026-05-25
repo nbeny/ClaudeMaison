@@ -1,0 +1,23 @@
+# Build artifacts
+dist/
+build/
+.next/
+*.tsbuildinfo
+
+# Dependencies + lockfiles
+node_modules/
+pnpm-lock.yaml
+
+# Generated
+coverage/
+*.min.js
+*.min.css
+
+# Repo metadata
+.git/
+
+# Docker volumes (mounted at runtime, contenu non lié au code)
+infrastructure/docker/.env
+
+# Données binaires versionnées (ex: Keycloak realm export)
+infrastructure/docker/keycloak/realm-claudemaison-dev.json

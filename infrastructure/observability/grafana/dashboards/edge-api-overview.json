@@ -36,13 +36,22 @@
       "id": 1,
       "fieldConfig": {
         "defaults": {
-          "custom": { "drawStyle": "line", "lineInterpolation": "linear", "fillOpacity": 10, "stacking": { "mode": "normal" } },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "stacking": { "mode": "normal" }
+          },
           "unit": "reqps"
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "lastNotNull"] },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "lastNotNull"]
+        },
         "tooltip": { "mode": "multi" }
       },
       "targets": [
@@ -106,13 +115,21 @@
       "id": 3,
       "fieldConfig": {
         "defaults": {
-          "custom": { "drawStyle": "line", "lineInterpolation": "linear", "fillOpacity": 10 },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10
+          },
           "unit": "reqps"
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "lastNotNull"] },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "lastNotNull"]
+        },
         "tooltip": { "mode": "multi" }
       },
       "targets": [
@@ -176,13 +193,21 @@
       "id": 5,
       "fieldConfig": {
         "defaults": {
-          "custom": { "drawStyle": "bars", "fillOpacity": 60, "stacking": { "mode": "normal" } },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": { "mode": "normal" }
+          },
           "unit": "evtps"
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum", "lastNotNull"] },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum", "lastNotNull"]
+        },
         "tooltip": { "mode": "multi" }
       },
       "targets": [

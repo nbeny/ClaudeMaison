@@ -1,11 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import {
-  buildBillingRig,
-  makeAdminSql,
-  resetDatabase,
-  type BillingRig,
-} from './helpers';
+import { buildBillingRig, makeAdminSql, resetDatabase, type BillingRig } from './helpers';
 import { currentCalendarMonth } from '../../src/modules/billing/quota.service';
 
 // Vérifie le comportement de QuotaService bout-en-bout : résolution de la
@@ -71,16 +66,20 @@ describe('billing quota — intégration', () => {
   it('avec subscription active, utilise les dates de la subscription comme période', async () => {
     // Crée un workspace + sa subscription pro. On force une période passée
     // pour vérifier que sumQuantity respecte le filtre temporel.
-    const userId = (await rig.db.sql<{ id: string }[]>`
+    const userId = (
+      await rig.db.sql<{ id: string }[]>`
       INSERT INTO auth.users (email, password_hash)
       VALUES ('quotauser@example.test', NULL)
       RETURNING id
-    `)[0].id;
-    const workspaceId = (await rig.db.sql<{ id: string }[]>`
+    `
+    )[0].id;
+    const workspaceId = (
+      await rig.db.sql<{ id: string }[]>`
       INSERT INTO auth.workspaces (name, owner_id)
       VALUES ('test-ws', ${userId})
       RETURNING id
-    `)[0].id;
+    `
+    )[0].id;
 
     const pro = (await rig.plans.findBySlug('pro'))!;
     const periodStart = new Date('2026-04-01T00:00:00Z');

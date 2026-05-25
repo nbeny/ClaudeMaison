@@ -25,14 +25,17 @@ On **n'entraîne aucun modèle de fondation**. La plateforme est construite sur 
 ## Conséquences
 
 **Positives** :
+
 - Capital concentré sur l'orchestration, la mémoire, le RAG, l'UX — la vraie différenciation.
 - Bénéfice automatique des progrès de l'écosystème ouvert.
 - Time-to-market drastiquement réduit.
 
 **Négatives** :
+
 - Dépendance à la disponibilité continue de modèles ouverts de qualité.
 - Pas d'avantage compétitif sur "l'intelligence brute" du modèle.
 
 **Engagements** :
+
 - Veille active sur les nouvelles sorties (revue trimestrielle du catalogue).
 - Maintenir la capacité d'intégrer un nouveau modèle rapidement (cf. routeur d'inférence, [Partie VII](../architecture/2026-05-24-architecture-souveraine.md#partie-vii--routeur-dinférence)).

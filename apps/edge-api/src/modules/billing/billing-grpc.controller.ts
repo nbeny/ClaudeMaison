@@ -38,7 +38,9 @@ export class BillingGrpcController {
   constructor(private readonly billing: BillingService) {}
 
   @GrpcMethod('Billing', 'RecordUsage')
-  async recordUsage(req: RecordUsageRequest): Promise<{ accepted: number; duplicates: number }> {
+  async recordUsage(
+    req: RecordUsageRequest,
+  ): Promise<{ accepted: number; duplicates: number }> {
     const events = (req.events ?? []).map(toRawEvent);
     return this.billing.recordUsage(events);
   }

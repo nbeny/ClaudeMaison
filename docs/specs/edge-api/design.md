@@ -8,23 +8,23 @@
 
 `edge-api` est le **binaire Jour-1** qui regroupe trois modules logiques de l'architecture en un seul processus Node.js, conformément à l'ADR-0004 :
 
-| Module logique | Rôle |
-|---|---|
-| `api-gateway` | Façade GraphQL pour clients, REST limité, terminaison WS, vérification JWT, propagation tracing |
-| `auth-service` | OIDC, sessions, JWT, RBAC, introspection inter-services |
-| `billing-service` | Plans, quotas, évènements d'usage, calcul des limites |
+| Module logique    | Rôle                                                                                            |
+| ----------------- | ----------------------------------------------------------------------------------------------- |
+| `api-gateway`     | Façade GraphQL pour clients, REST limité, terminaison WS, vérification JWT, propagation tracing |
+| `auth-service`    | OIDC, sessions, JWT, RBAC, introspection inter-services                                         |
+| `billing-service` | Plans, quotas, évènements d'usage, calcul des limites                                           |
 
 Les trois cohabitent dans `apps/edge-api/` avec des frontières internes claires (`src/modules/auth/`, `src/modules/billing/`, `src/modules/gateway/`) pour que l'extraction future soit mécanique.
 
 ## 2. Hors périmètre
 
-| Ce qui n'est PAS dans `edge-api` | Où ça vit |
-|---|---|
-| Streaming long de tokens et d'évènements agents | `realtime` (binaire séparé) |
-| Raisonnement, planification, exécution d'agents | `ai-core` |
-| RAG, embeddings, ingestion | `retrieval`, `workers` |
-| Exécution d'outils (shell, code, browser) | `tools` (sandboxing Firecracker) |
-| Inférence LLM | plan d'inférence GPU via `inference-router` |
+| Ce qui n'est PAS dans `edge-api`                | Où ça vit                                   |
+| ----------------------------------------------- | ------------------------------------------- |
+| Streaming long de tokens et d'évènements agents | `realtime` (binaire séparé)                 |
+| Raisonnement, planification, exécution d'agents | `ai-core`                                   |
+| RAG, embeddings, ingestion                      | `retrieval`, `workers`                      |
+| Exécution d'outils (shell, code, browser)       | `tools` (sandboxing Firecracker)            |
+| Inférence LLM                                   | plan d'inférence GPU via `inference-router` |
 
 ## 3. API exposée
 
@@ -33,6 +33,7 @@ Les trois cohabitent dans `apps/edge-api/` avec des frontières internes claires
 - Endpoint : `POST /graphql`
 - Code-first via `@nestjs/graphql` + Apollo Driver.
 - Schéma initial :
+
   ```graphql
   type Query {
     health: HealthStatus!
@@ -51,6 +52,7 @@ Les trois cohabitent dans `apps/edge-api/` avec des frontières internes claires
     workspaces: [Workspace!]!
   }
   ```
+
 - Le schéma s'enrichit au fil des commits (auth, billing, conversations).
 
 ### 3.2 REST (cas particuliers)
@@ -77,21 +79,21 @@ Endpoint interne pour les binaires producteurs d'usage (`ai-core`, `workers`, `t
 
 ## 4. Stack
 
-| Couche | Choix |
-|---|---|
-| Runtime | Node.js 22 LTS |
-| Framework | NestJS 11 sur **Fastify** (perf > Express) |
-| GraphQL | `@nestjs/graphql` + Apollo Driver (code-first) |
-| ORM | Drizzle (lite, type-safe) |
-| Migrations | Atlas (déclaratif, lit le schéma Drizzle) |
-| Redis | `ioredis` |
-| JWT | `jose` |
-| Validation env | Zod |
-| Validation DTO REST | `class-validator` |
-| Logs | `pino` via `nestjs-pino` |
-| Tests | Vitest + Testcontainers pour intégration |
-| Health | `@nestjs/terminus` |
-| Tracing | OpenTelemetry SDK Node |
+| Couche              | Choix                                          |
+| ------------------- | ---------------------------------------------- |
+| Runtime             | Node.js 22 LTS                                 |
+| Framework           | NestJS 11 sur **Fastify** (perf > Express)     |
+| GraphQL             | `@nestjs/graphql` + Apollo Driver (code-first) |
+| ORM                 | Drizzle (lite, type-safe)                      |
+| Migrations          | Atlas (déclaratif, lit le schéma Drizzle)      |
+| Redis               | `ioredis`                                      |
+| JWT                 | `jose`                                         |
+| Validation env      | Zod                                            |
+| Validation DTO REST | `class-validator`                              |
+| Logs                | `pino` via `nestjs-pino`                       |
+| Tests               | Vitest + Testcontainers pour intégration       |
+| Health              | `@nestjs/terminus`                             |
+| Tracing             | OpenTelemetry SDK Node                         |
 
 ## 5. Modèle de données (extrait `edge-api`)
 
@@ -117,21 +119,21 @@ Schémas SQL complets : voir [Partie VI §6.1 de l'architecture](../../architect
 
 Toutes les variables d'environnement sont **validées au boot** par un schéma Zod. Le process refuse de démarrer si une valeur manque ou est invalide.
 
-| Variable | Description | Défaut |
-|---|---|---|
-| `NODE_ENV` | `development` / `staging` / `production` | `development` |
-| `PORT` | port HTTP | `3000` |
-| `LOG_LEVEL` | `debug` / `info` / `warn` / `error` | `info` |
-| `DATABASE_URL` | DSN Postgres | — |
-| `REDIS_URL` | URL Redis | — |
-| `JWT_ISSUER` | issuer dans les JWT émis | — |
-| `JWT_AUDIENCE` | audience attendue | — |
-| `JWT_SIGNING_KEY` | clé HMAC ou chemin PEM RSA (lu depuis Vault en prod) | — |
-| `ALLOWED_ORIGINS` | CSV pour CORS | `http://localhost:3001` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | collecteur OTel | — |
-| `BILLING_GRPC_HOST` | host d'écoute du serveur gRPC billing | `0.0.0.0` |
-| `BILLING_GRPC_PORT` | port d'écoute du serveur gRPC billing | `5001` |
-| `BILLING_GRPC_TOKEN` | bearer partagé pour les callers internes (active le serveur s'il est défini) | — |
+| Variable                      | Description                                                                  | Défaut                  |
+| ----------------------------- | ---------------------------------------------------------------------------- | ----------------------- |
+| `NODE_ENV`                    | `development` / `staging` / `production`                                     | `development`           |
+| `PORT`                        | port HTTP                                                                    | `3000`                  |
+| `LOG_LEVEL`                   | `debug` / `info` / `warn` / `error`                                          | `info`                  |
+| `DATABASE_URL`                | DSN Postgres                                                                 | —                       |
+| `REDIS_URL`                   | URL Redis                                                                    | —                       |
+| `JWT_ISSUER`                  | issuer dans les JWT émis                                                     | —                       |
+| `JWT_AUDIENCE`                | audience attendue                                                            | —                       |
+| `JWT_SIGNING_KEY`             | clé HMAC ou chemin PEM RSA (lu depuis Vault en prod)                         | —                       |
+| `ALLOWED_ORIGINS`             | CSV pour CORS                                                                | `http://localhost:3001` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | collecteur OTel                                                              | —                       |
+| `BILLING_GRPC_HOST`           | host d'écoute du serveur gRPC billing                                        | `0.0.0.0`               |
+| `BILLING_GRPC_PORT`           | port d'écoute du serveur gRPC billing                                        | `5001`                  |
+| `BILLING_GRPC_TOKEN`          | bearer partagé pour les callers internes (active le serveur s'il est défini) | —                       |
 
 ## 7. Sécurité
 
@@ -171,12 +173,12 @@ Toutes les variables d'environnement sont **validées au boot** par un schéma Z
 
 ## 9. Stratégie de tests
 
-| Niveau | Outil | Cible | État |
-|---|---|---|---|
-| Unitaire | Vitest | services, helpers | en place (18 tests) |
+| Niveau      | Outil                                                | Cible                            | État                                                                                                  |
+| ----------- | ---------------------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Unitaire    | Vitest                                               | services, helpers                | en place (18 tests)                                                                                   |
 | Intégration | Vitest + testcontainers (Postgres + Redis éphémères) | repos + services contre vraie DB | en place (10 tests : auth signup/refresh/chaîne révoquée, billing idempotence, quota free/active sub) |
-| Contrat | Pact ou snapshot du schéma GraphQL | détection breaking change | à venir |
-| E2E | Playwright (depuis `apps/web`) | parcours utilisateur réel | à venir |
+| Contrat     | Pact ou snapshot du schéma GraphQL                   | détection breaking change        | à venir                                                                                               |
+| E2E         | Playwright (depuis `apps/web`)                       | parcours utilisateur réel        | à venir                                                                                               |
 
 Les tests d'intégration tournent via `pnpm --filter edge-api test:integration` :
 testcontainers démarre les services pour la durée de la run, partagés entre fichiers
@@ -186,16 +188,16 @@ est donc testée automatiquement.
 
 ## 10. Plan d'implémentation incrémental
 
-| Étape | Contenu | Statut |
-|---|---|---|
-| 0 | Spec écrite | **fait (ce commit)** |
-| 1 | Squelette NestJS bootable, `/health`, `/graphql` (avec `viewer` placeholder), Dockerfile, docker-compose dev (Postgres + Redis) | **fait (commit suivant)** |
-| 2 | Module `auth` : inscription/connexion locales, JWT, schéma SQL initial, migrations Atlas | **fait** |
-| 3 | Module `auth` : OIDC Authorization Code Flow + Keycloak self-hosted en compose | **fait** |
-| 4 | Module `billing` : plans, quotas, `usage_events`, intégration gRPC pour écriture depuis `ai-core` | **fait** |
-| 5a | OTel SDK + instrumentations sélectives + métriques custom dans le binaire | **fait** |
-| 5b | Stack de collecte : OTel Collector + Prometheus + Tempo + Grafana avec dashboards versionnés (profile compose `obs`) | **fait** |
-| 6 | Tests d'intégration testcontainers (auth + billing) + pipeline GitHub Actions (type-check, unit, integration, build) | **fait** |
+| Étape | Contenu                                                                                                                         | Statut                    |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| 0     | Spec écrite                                                                                                                     | **fait (ce commit)**      |
+| 1     | Squelette NestJS bootable, `/health`, `/graphql` (avec `viewer` placeholder), Dockerfile, docker-compose dev (Postgres + Redis) | **fait (commit suivant)** |
+| 2     | Module `auth` : inscription/connexion locales, JWT, schéma SQL initial, migrations Atlas                                        | **fait**                  |
+| 3     | Module `auth` : OIDC Authorization Code Flow + Keycloak self-hosted en compose                                                  | **fait**                  |
+| 4     | Module `billing` : plans, quotas, `usage_events`, intégration gRPC pour écriture depuis `ai-core`                               | **fait**                  |
+| 5a    | OTel SDK + instrumentations sélectives + métriques custom dans le binaire                                                       | **fait**                  |
+| 5b    | Stack de collecte : OTel Collector + Prometheus + Tempo + Grafana avec dashboards versionnés (profile compose `obs`)            | **fait**                  |
+| 6     | Tests d'intégration testcontainers (auth + billing) + pipeline GitHub Actions (type-check, unit, integration, build)            | **fait**                  |
 
 ## 11. Critères de "Done" pour le binaire Jour-1
 

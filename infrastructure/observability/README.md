@@ -6,12 +6,12 @@ zéro phone-home : aucun cloud US ni télémétrie sortante non-désirée.
 
 ## Composants
 
-| Composant | Rôle | Port hôte |
-|---|---|---|
+| Composant        | Rôle                                                    | Port hôte                                          |
+| ---------------- | ------------------------------------------------------- | -------------------------------------------------- |
 | `otel-collector` | Reçoit OTLP gRPC/HTTP des binaires, route vers backends | `4317` (gRPC), `4318` (HTTP), `8889` (Prom expose) |
-| `prometheus` | Stockage et requêtage des métriques | `9090` |
-| `tempo` | Stockage et requêtage des traces distribuées | `3200` |
-| `grafana` | UI : dashboards + explore | `3001` (3000 pris par edge-api) |
+| `prometheus`     | Stockage et requêtage des métriques                     | `9090`                                             |
+| `tempo`          | Stockage et requêtage des traces distribuées            | `3200`                                             |
+| `grafana`        | UI : dashboards + explore                               | `3001` (3000 pris par edge-api)                    |
 
 Pipeline :
 
@@ -48,11 +48,11 @@ Sans cette variable, le SDK reste no-op (cf. `apps/edge-api/src/telemetry.ts`).
 
 Les métriques custom suivent le pattern `<domaine>_<sujet>_<unité>` :
 
-| Métrique | Type | Labels | Origine |
-|---|---|---|---|
-| `auth_attempts_total` | counter | `kind`, `result` | `AuthService` |
-| `billing_quota_check_total` | counter | `kind`, `allowed` | `QuotaService` |
-| `billing_usage_events_recorded_total` | counter | `result` | `BillingService` |
+| Métrique                              | Type    | Labels            | Origine          |
+| ------------------------------------- | ------- | ----------------- | ---------------- |
+| `auth_attempts_total`                 | counter | `kind`, `result`  | `AuthService`    |
+| `billing_quota_check_total`           | counter | `kind`, `allowed` | `QuotaService`   |
+| `billing_usage_events_recorded_total` | counter | `result`          | `BillingService` |
 
 Les métriques auto-instrumentées par OTel (HTTP server, GraphQL resolver
 duration, ioredis, pg) gardent leur nom semconv standard.

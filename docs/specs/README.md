@@ -9,4 +9,4 @@ Vide pour l'instant — chaque service obtient sa spec au moment de son démarra
 3. Plan d'implémentation.
 4. Code.
 
-Le doc d'architecture donne la *vision* ; les specs donnent les *contrats*.
+Le doc d'architecture donne la _vision_ ; les specs donnent les _contrats_.

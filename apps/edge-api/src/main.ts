@@ -10,10 +10,7 @@ import helmet from '@fastify/helmet';
 import cors from '@fastify/cors';
 import { NestFactory } from '@nestjs/core';
 import { Transport, type MicroserviceOptions } from '@nestjs/microservices';
-import {
-  FastifyAdapter,
-  NestFastifyApplication,
-} from '@nestjs/platform-fastify';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Logger } from 'nestjs-pino';
 import { join } from 'node:path';
 import { AppModule } from './app.module';
@@ -67,21 +64,18 @@ async function bootstrap(): Promise<void> {
       { inheritAppConfig: true },
     );
     await app.startAllMicroservices();
-    // eslint-disable-next-line no-console
+
     console.log(
       `billing gRPC écoute sur ${env.BILLING_GRPC_HOST}:${env.BILLING_GRPC_PORT}`,
     );
   } else {
-    // eslint-disable-next-line no-console
-    console.warn(
-      'BILLING_GRPC_TOKEN non défini — endpoint gRPC billing désactivé.',
-    );
+    console.warn('BILLING_GRPC_TOKEN non défini — endpoint gRPC billing désactivé.');
   }
 
   app.enableShutdownHooks();
 
   await app.listen({ port: env.PORT, host: '0.0.0.0' });
-  // eslint-disable-next-line no-console
+
   console.log(`edge-api écoute sur http://0.0.0.0:${env.PORT}`);
 }
 
@@ -94,7 +88,6 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
 }
 
 bootstrap().catch((err) => {
-  // eslint-disable-next-line no-console
   console.error('Échec du démarrage de edge-api :', err);
   process.exit(1);
 });

@@ -14,6 +14,7 @@ Procédures opérationnelles. Vide pour l'instant — à peupler au fur et à me
 ## Format
 
 Chaque runbook commence par :
+
 - **Quand l'utiliser** (signal d'alerte précis)
 - **Pré-requis** (accès, outils)
 - **Étapes** (numérotées, copiables)

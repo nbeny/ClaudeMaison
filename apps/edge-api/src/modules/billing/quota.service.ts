@@ -140,9 +140,7 @@ export class QuotaService {
       // PlansSeeder garantit la présence du plan free au démarrage. Si on
       // arrive ici, soit le seeder a échoué, soit quelqu'un a fait DELETE
       // FROM billing.plans WHERE slug='free' à la main. Fail-fast.
-      throw new Error(
-        'Plan "free" introuvable. Le PlansSeeder a-t-il été exécuté ?',
-      );
+      throw new Error('Plan "free" introuvable. Le PlansSeeder a-t-il été exécuté ?');
     }
     const { start, end } = currentCalendarMonth(new Date());
     return { plan: free, periodStart: start, periodEnd: end, subscription: null };

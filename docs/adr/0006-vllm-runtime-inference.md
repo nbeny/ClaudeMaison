@@ -13,6 +13,7 @@ Plusieurs runtimes d'inférence existent (vLLM, TGI de Hugging Face, llama.cpp, 
 **vLLM** comme runtime d'inférence par défaut pour tous les LLM et embeddings GPU servis sur nos propres GPUs.
 
 Raisons :
+
 - **PagedAttention** : KV-cache géré finement, supporte le partage de cache entre requêtes d'une même conversation.
 - **Batching dynamique** : excellent débit en multi-tenant.
 - **Speculative decoding** intégré.
@@ -28,12 +29,15 @@ Raisons :
 ## Conséquences
 
 **Positives** :
+
 - Un seul runtime à apprendre, monitorer, mettre à jour.
 - Excellent débit dès le Jour-1.
 
 **Négatives** :
+
 - Risque d'engagement excessif si vLLM stagne ; le routeur d'inférence isole heureusement les services applicatifs de ce choix.
 
 **Engagements** :
+
 - Le routeur d'inférence ne suppose pas l'usage de vLLM ; il parle l'API OpenAI-compatible. Toute substitution future (TGI, SGLang) est mécanique.
 - Pinning strict de la version vLLM par environnement, mise à jour mensuelle accompagnée d'un benchmark.

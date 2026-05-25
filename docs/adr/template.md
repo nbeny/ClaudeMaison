@@ -20,10 +20,13 @@ Ce qui est décidé, en quelques phrases. Sans ambiguïté.
 ## Conséquences
 
 **Positives** :
+
 - …
 
 **Négatives** :
+
 - …
 
 **Engagements** :
+
 - …

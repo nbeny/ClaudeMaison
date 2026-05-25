@@ -73,13 +73,17 @@ export class OidcDiscoveryService implements OnModuleInit {
       tokenEndpoint: doc.token_endpoint as string,
       jwksUri: doc.jwks_uri as string,
       endSessionEndpoint:
-        typeof doc.end_session_endpoint === 'string' ? doc.end_session_endpoint : undefined,
+        typeof doc.end_session_endpoint === 'string'
+          ? doc.end_session_endpoint
+          : undefined,
     };
     this.jwks = createRemoteJWKSet(new URL(this.metadata.jwksUri), {
       cacheMaxAge: 10 * 60 * 1_000, // 10 min, jose refresh à la demande au-delà
       cooldownDuration: 30_000,
     });
-    this.logger.log(`Discovery OIDC OK pour ${this.metadata.issuer} (client ${this.clientId}).`);
+    this.logger.log(
+      `Discovery OIDC OK pour ${this.metadata.issuer} (client ${this.clientId}).`,
+    );
   }
 
   getMetadata(): OidcMetadata {

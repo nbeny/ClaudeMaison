@@ -4,12 +4,12 @@ Tout ce qui n'est pas code applicatif : conteneurisation, orchestration, IaC, ob
 
 ## Sous-dossiers prévus
 
-| Dossier | Contenu | Statut |
-|---|---|---|
-| `docker/` | Dockerfiles communs, `docker-compose.dev.yml` (Postgres, Redis, Qdrant, MinIO, NATS locaux) | à créer |
-| `kubernetes/` | Helm charts par service, valeurs par environnement | à créer |
-| `terraform/` | provisioning Scaleway/OVH (clusters K8s, bases managées, buckets, DNS) | à créer |
-| `monitoring/` | dashboards Grafana, règles Prometheus, configs Loki/Tempo | à créer |
+| Dossier       | Contenu                                                                                     | Statut  |
+| ------------- | ------------------------------------------------------------------------------------------- | ------- |
+| `docker/`     | Dockerfiles communs, `docker-compose.dev.yml` (Postgres, Redis, Qdrant, MinIO, NATS locaux) | à créer |
+| `kubernetes/` | Helm charts par service, valeurs par environnement                                          | à créer |
+| `terraform/`  | provisioning Scaleway/OVH (clusters K8s, bases managées, buckets, DNS)                      | à créer |
+| `monitoring/` | dashboards Grafana, règles Prometheus, configs Loki/Tempo                                   | à créer |
 
 ## Cibles d'hébergement
 

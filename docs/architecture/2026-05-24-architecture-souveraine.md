@@ -42,7 +42,7 @@
 ### 0.2 Ce que ce document n'est pas
 
 - **Pas une spec d'implémentation.** Chaque service a (ou aura) sa propre spec dans `docs/specs/`.
-- **Pas une description du Jour-1.** L'architecture présentée est la cible à 18 mois. La Partie III précise ce qui est *réellement déployé* aujourd'hui.
+- **Pas une description du Jour-1.** L'architecture présentée est la cible à 18 mois. La Partie III précise ce qui est _réellement déployé_ aujourd'hui.
 - **Pas figé.** Les décisions structurantes sont consignées en `docs/adr/` ; quand une décision change, on amende l'ADR et on met ce document à jour.
 
 ### 0.3 Les cinq décisions qui contraignent tout
@@ -57,15 +57,15 @@ Si tu ne dois retenir que cinq choses :
 
 ### 0.4 Glossaire express
 
-| Terme | Définition |
-|---|---|
-| **Orchestrateur** | Service qui reçoit une requête utilisateur, décide quels agents/outils invoquer, compose le prompt final, choisit le modèle via le routeur, et stream la réponse. |
-| **Routeur d'inférence** | Composant qui décide *quel* modèle servir une requête donnée (coût, latence, capacité requise) et qui parle au runtime vLLM correspondant. |
-| **Agent** | Boucle raisonnement-action avec un rôle spécialisé (Planner, Critic, Tool, …). Tourne dans l'agent-runtime, communique via NATS. |
-| **Souvenir** | Unité indexable de mémoire long-terme. Quatre couches : court terme (fenêtre conversation), épisodique (résumés de sessions), sémantique (faits stables sur l'utilisateur), long terme (corpus personnel ingéré). |
-| **Pièce de contexte** | Tout fragment qu'on injecte dans un prompt : message, document RAG, souvenir, sortie d'outil. |
-| **Plan de contrôle** | Cluster K8s qui exécute le code applicatif (API, workers, orchestrateur). |
-| **Plan d'inférence** | Cluster K8s qui exécute les serveurs de modèles (vLLM) sur GPUs. Séparé pour des raisons de coût, de scaling et de profil matériel. |
+| Terme                   | Définition                                                                                                                                                                                                        |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Orchestrateur**       | Service qui reçoit une requête utilisateur, décide quels agents/outils invoquer, compose le prompt final, choisit le modèle via le routeur, et stream la réponse.                                                 |
+| **Routeur d'inférence** | Composant qui décide _quel_ modèle servir une requête donnée (coût, latence, capacité requise) et qui parle au runtime vLLM correspondant.                                                                        |
+| **Agent**               | Boucle raisonnement-action avec un rôle spécialisé (Planner, Critic, Tool, …). Tourne dans l'agent-runtime, communique via NATS.                                                                                  |
+| **Souvenir**            | Unité indexable de mémoire long-terme. Quatre couches : court terme (fenêtre conversation), épisodique (résumés de sessions), sémantique (faits stables sur l'utilisateur), long terme (corpus personnel ingéré). |
+| **Pièce de contexte**   | Tout fragment qu'on injecte dans un prompt : message, document RAG, souvenir, sortie d'outil.                                                                                                                     |
+| **Plan de contrôle**    | Cluster K8s qui exécute le code applicatif (API, workers, orchestrateur).                                                                                                                                         |
+| **Plan d'inférence**    | Cluster K8s qui exécute les serveurs de modèles (vLLM) sur GPUs. Séparé pour des raisons de coût, de scaling et de profil matériel.                                                                               |
 
 ---
 
@@ -73,7 +73,7 @@ Si tu ne dois retenir que cinq choses :
 
 ### 1.1 Mission
 
-Construire un assistant IA qui *paraisse intelligent* sur la durée — qui se souvienne, qui raisonne, qui utilise des outils, qui collabore avec lui-même via des agents, et qui s'adapte à chaque utilisateur. Le tout sur infrastructure souveraine européenne.
+Construire un assistant IA qui _paraisse intelligent_ sur la durée — qui se souvienne, qui raisonne, qui utilise des outils, qui collabore avec lui-même via des agents, et qui s'adapte à chaque utilisateur. Le tout sur infrastructure souveraine européenne.
 
 ### 1.2 Différenciation
 
@@ -183,19 +183,19 @@ Cas : utilisateur authentifié envoie « Analyse le PDF que je viens d'uploader 
 4. **Orchestrator → Memory** : récupère court-terme (N derniers tours) + sémantique pertinente (profil utilisateur, préférences).
 5. **Orchestrator → RAG** : pour le PDF référencé, récupère les chunks pertinents (déjà ingérés par `worker-ingestion` à l'upload).
 6. **Orchestrator → Router** : « j'ai besoin d'un modèle de raisonnement, contexte 32k, latence non critique ». Le routeur sélectionne DeepSeek-R1, envoie la requête à l'instance vLLM la moins chargée.
-7. **Orchestrator** : si le raisonnement décide qu'un *plan d'action* doit être généré par un agent dédié, publication sur NATS d'une tâche pour `PlannerAgent` dans l'agent-runtime.
+7. **Orchestrator** : si le raisonnement décide qu'un _plan d'action_ doit être généré par un agent dédié, publication sur NATS d'une tâche pour `PlannerAgent` dans l'agent-runtime.
 8. **Agent runtime** : `PlannerAgent` exécute sa boucle, peut invoquer `ToolAgent` (lecture du PDF en haute fidélité via le `tool-service`), puis `CriticAgent` valide.
 9. **Streaming** : tokens et évènements (`agent_started`, `tool_called`, `tool_result`, `agent_finished`) sont publiés sur Redis Streams, consommés par `realtime-service`, retransmis au client via SSE.
 10. **Memory** : `worker-summarisation` consomme l'évènement de fin de conversation et écrit un résumé épisodique.
 
 ### 2.3 Frontières & responsabilités
 
-| Plan | Responsabilité | Cycle de release |
-|---|---|---|
-| **Bordure** | Authentifier, router, ouvrir les canaux temps-réel. Aucune logique métier. | Hebdomadaire |
-| **Contrôle** | Logique applicative, agents, orchestration, RAG, mémoire. C'est ici qu'on passe 80 % de notre temps. | Plusieurs fois par jour |
-| **Inférence** | Servir des modèles. Stateless. Pinné en version. | Mensuel (sauf urgence) |
-| **Données** | Stocker. Aucune logique. | Migrations contrôlées |
+| Plan          | Responsabilité                                                                                       | Cycle de release        |
+| ------------- | ---------------------------------------------------------------------------------------------------- | ----------------------- |
+| **Bordure**   | Authentifier, router, ouvrir les canaux temps-réel. Aucune logique métier.                           | Hebdomadaire            |
+| **Contrôle**  | Logique applicative, agents, orchestration, RAG, mémoire. C'est ici qu'on passe 80 % de notre temps. | Plusieurs fois par jour |
+| **Inférence** | Servir des modèles. Stateless. Pinné en version.                                                     | Mensuel (sauf urgence)  |
+| **Données**   | Stocker. Aucune logique.                                                                             | Migrations contrôlées   |
 
 Cette séparation est **stricte** : un service de contrôle ne parle jamais directement à vLLM, il passe par le routeur.
 
@@ -205,23 +205,23 @@ Cette séparation est **stricte** : un service de contrôle ne parle jamais dire
 
 ### 3.1 Les 15 services logiques
 
-| # | Service | Rôle | Stack |
-|---|---|---|---|
-| 1 | `web` | App utilisateur web | Next.js 15, Apollo |
-| 2 | `mobile` | App mobile | React Native + Expo |
-| 3 | `api-gateway` | Façade GraphQL/REST/WS | NestJS |
-| 4 | `auth-service` | OIDC, sessions, RBAC | NestJS |
-| 5 | `billing-service` | Quotas, plans, facturation | NestJS |
-| 6 | `ai-orchestrator` | Boucle de raisonnement principale | Python + FastAPI |
-| 7 | `agent-runtime` | Hôte d'exécution des agents | Python |
-| 8 | `tool-service` | Exécution sandboxée d'outils | Python + Firecracker |
-| 9 | `memory-service` | API mémoire 4 couches | Python |
-| 10 | `rag-service` | Requêtes RAG (retrieve + rerank) | Python |
-| 11 | `embedding-service` | API d'embeddings | Python |
-| 12 | `inference-router` | Routage modèles | Python ou Go |
-| 13 | `realtime-service` | Diffusion SSE/WS | Node.js (Fastify) |
-| 14 | `worker-ingestion` | Pipelines ingestion documents | Python (Celery/Arq) |
-| 15 | `worker-summarisation` | Résumés mémoire async | Python |
+| #   | Service                | Rôle                              | Stack                |
+| --- | ---------------------- | --------------------------------- | -------------------- |
+| 1   | `web`                  | App utilisateur web               | Next.js 15, Apollo   |
+| 2   | `mobile`               | App mobile                        | React Native + Expo  |
+| 3   | `api-gateway`          | Façade GraphQL/REST/WS            | NestJS               |
+| 4   | `auth-service`         | OIDC, sessions, RBAC              | NestJS               |
+| 5   | `billing-service`      | Quotas, plans, facturation        | NestJS               |
+| 6   | `ai-orchestrator`      | Boucle de raisonnement principale | Python + FastAPI     |
+| 7   | `agent-runtime`        | Hôte d'exécution des agents       | Python               |
+| 8   | `tool-service`         | Exécution sandboxée d'outils      | Python + Firecracker |
+| 9   | `memory-service`       | API mémoire 4 couches             | Python               |
+| 10  | `rag-service`          | Requêtes RAG (retrieve + rerank)  | Python               |
+| 11  | `embedding-service`    | API d'embeddings                  | Python               |
+| 12  | `inference-router`     | Routage modèles                   | Python ou Go         |
+| 13  | `realtime-service`     | Diffusion SSE/WS                  | Node.js (Fastify)    |
+| 14  | `worker-ingestion`     | Pipelines ingestion documents     | Python (Celery/Arq)  |
+| 15  | `worker-summarisation` | Résumés mémoire async             | Python               |
 
 ### 3.2 Stratégie de déploiement Jour-1 vs Jour-N
 
@@ -253,6 +253,7 @@ Quinze déploiements pour une petite équipe = bruit ops. On regroupe.
 Plus, sur le plan d'inférence : `inference-router` + N instances vLLM.
 
 **Critères d'extraction** d'un module en service séparé :
+
 - Profil de charge divergent (CPU vs IO vs GPU).
 - Frontière de sécurité (le tool-service est extrait dès le Jour-1 pour cette raison).
 - Équipe dédiée prête à le posséder.
@@ -319,7 +320,7 @@ ClaudeMaison/
 ### 4.3 Packages partagés — règles
 
 - **`shared-types`** est généré (jamais édité à la main) à partir des schémas GraphQL et `.proto`.
-- **`shared-prompts`** versionne chaque template. Un changement de prompt = bump de version + entrée dans le changelog. Les prompts sont des *artefacts* avec tests d'évaluation associés.
+- **`shared-prompts`** versionne chaque template. Un changement de prompt = bump de version + entrée dans le changelog. Les prompts sont des _artefacts_ avec tests d'évaluation associés.
 - **`shared-agents`** et **`shared-tools`** sont des registres. Un agent ou un outil est défini une fois, consommé par plusieurs services.
 - **Aucun import croisé entre `apps/`.** Tout partage passe par `packages/`.
 
@@ -329,14 +330,14 @@ ClaudeMaison/
 
 ### 5.1 Quel style pour quoi
 
-| Style | Quand l'utiliser | Quand l'éviter |
-|---|---|---|
-| **GraphQL** | Surface client (web, mobile). Une seule façade riche. | Communication interne. |
-| **REST** | Endpoints simples côté client (upload de fichiers, webhooks entrants). Intégrations tierces. | Tout ce qui est interne. |
-| **gRPC** | Communication synchrone interne entre services. Schémas `.proto` versionnés. | Côté client navigateur. |
-| **SSE** | Streaming de tokens et d'évènements *du serveur vers le client*. Plus simple que WS, suffit pour le 1-way. | Tout cas où le client doit aussi pousser du flux. |
-| **WebSocket** | Bidirectionnel temps-réel (mode vocal, collaboration multi-utilisateurs sur un workspace). | Streaming simple (préférer SSE). |
-| **NATS JetStream** | Asynchrone interne : évènements, file de travail entre orchestrator et agent-runtime, fan-out de notifications. | Requête-réponse synchrone (préférer gRPC). |
+| Style              | Quand l'utiliser                                                                                                | Quand l'éviter                                    |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| **GraphQL**        | Surface client (web, mobile). Une seule façade riche.                                                           | Communication interne.                            |
+| **REST**           | Endpoints simples côté client (upload de fichiers, webhooks entrants). Intégrations tierces.                    | Tout ce qui est interne.                          |
+| **gRPC**           | Communication synchrone interne entre services. Schémas `.proto` versionnés.                                    | Côté client navigateur.                           |
+| **SSE**            | Streaming de tokens et d'évènements _du serveur vers le client_. Plus simple que WS, suffit pour le 1-way.      | Tout cas où le client doit aussi pousser du flux. |
+| **WebSocket**      | Bidirectionnel temps-réel (mode vocal, collaboration multi-utilisateurs sur un workspace).                      | Streaming simple (préférer SSE).                  |
+| **NATS JetStream** | Asynchrone interne : évènements, file de travail entre orchestrator et agent-runtime, fan-out de notifications. | Requête-réponse synchrone (préférer gRPC).        |
 
 ### 5.2 Diagramme de communication
 
@@ -497,35 +498,36 @@ Migrations : **Atlas** ou **Flyway** (Atlas préféré pour le diff déclaratif)
 
 ### 6.2 Redis — éphémère
 
-| Usage | TTL typique |
-|---|---|
-| Sessions / cache JWT introspection | 1 h |
-| Cache embeddings (clé = hash texte) | 7 j |
-| Cache réponses LLM (sur prompts déterministes) | 24 h |
-| Rate-limit counters | fenêtre glissante |
-| Idempotency keys | 24 h |
+| Usage                                                                               | TTL typique                |
+| ----------------------------------------------------------------------------------- | -------------------------- |
+| Sessions / cache JWT introspection                                                  | 1 h                        |
+| Cache embeddings (clé = hash texte)                                                 | 7 j                        |
+| Cache réponses LLM (sur prompts déterministes)                                      | 24 h                       |
+| Rate-limit counters                                                                 | fenêtre glissante          |
+| Idempotency keys                                                                    | 24 h                       |
 | Redis Streams : `stream:conv:<id>` (tokens) et `stream:run:<id>` (évènements agent) | 1 h après dernier consumer |
-| Locks distribués (Redlock) pour migrations / cron | < 1 min |
+| Locks distribués (Redlock) pour migrations / cron                                   | < 1 min                    |
 
-Cluster Redis avec persistance AOF activée pour les streams ; pas critique car les évènements sont *aussi* écrits en Postgres pour rejouabilité.
+Cluster Redis avec persistance AOF activée pour les streams ; pas critique car les évènements sont _aussi_ écrits en Postgres pour rejouabilité.
 
 ### 6.3 Qdrant — vecteurs
 
 Collections séparées par dimension/usage :
 
-| Collection | Vecteur | Métadonnées filtrantes |
-|---|---|---|
-| `mem_semantic` | bge-large-fr (1024d, cosine) | user_id, workspace_id, importance, decay_at |
-| `mem_episodic` | bge-large-fr (1024d, cosine) | user_id, conversation_id, created_at |
-| `docs_chunks` | bge-large-fr (1024d, cosine) | workspace_id, document_id, page, lang |
-| `docs_summaries` | bge-large-fr (1024d, cosine) | workspace_id, document_id |
-| `prompts_eval` | bge-small-fr (384d) | prompt_id, version |
+| Collection       | Vecteur                      | Métadonnées filtrantes                      |
+| ---------------- | ---------------------------- | ------------------------------------------- |
+| `mem_semantic`   | bge-large-fr (1024d, cosine) | user_id, workspace_id, importance, decay_at |
+| `mem_episodic`   | bge-large-fr (1024d, cosine) | user_id, conversation_id, created_at        |
+| `docs_chunks`    | bge-large-fr (1024d, cosine) | workspace_id, document_id, page, lang       |
+| `docs_summaries` | bge-large-fr (1024d, cosine) | workspace_id, document_id                   |
+| `prompts_eval`   | bge-small-fr (384d)          | prompt_id, version                          |
 
 Sharding par `user_id` pour `mem_*` quand la collection dépasse 10M points (Qdrant supporte le sharding par champ de payload).
 
 ### 6.4 MinIO — stockage objet
 
 Buckets :
+
 - `documents` : fichiers utilisateurs originaux (chiffrés au repos, SSE-C avec clés en Vault).
 - `derived` : versions extraites/converties (texte brut, images extraites de PDF, miniatures).
 - `audio` : enregistrements vocaux (mode voix).
@@ -540,7 +542,7 @@ DynamoDB est un service AWS managé : exclu par la contrainte de souveraineté. 
 
 - **Postgres** pour 95 % des cas (jusqu'à plusieurs millions de QPS avec PgBouncer + partitionnement).
 - **Redis** pour le KV chaud éphémère.
-- **ScyllaDB** si un cas d'usage *à fort débit d'écriture et faible latence* émerge (par ex. journalisation d'agent à 100k évènements/s). Open-source, déployable EU. Pas au Jour-1.
+- **ScyllaDB** si un cas d'usage _à fort débit d'écriture et faible latence_ émerge (par ex. journalisation d'agent à 100k évènements/s). Open-source, déployable EU. Pas au Jour-1.
 
 ---
 
@@ -548,7 +550,7 @@ DynamoDB est un service AWS managé : exclu par la contrainte de souveraineté. 
 
 ### 7.1 Le problème
 
-Une plateforme avec 6+ modèles servis (raisonnement, généraliste, code, embeddings, vision, STT) doit décider en *millisecondes* lequel utiliser pour chaque appel, en équilibrant coût, latence, qualité et capacité disponible. Le faire dans le code applicatif disperse cette logique partout et empêche d'optimiser.
+Une plateforme avec 6+ modèles servis (raisonnement, généraliste, code, embeddings, vision, STT) doit décider en _millisecondes_ lequel utiliser pour chaque appel, en équilibrant coût, latence, qualité et capacité disponible. Le faire dans le code applicatif disperse cette logique partout et empêche d'optimiser.
 
 ### 7.2 Architecture
 
@@ -621,16 +623,16 @@ Les poids `w_*` sont configurables par environnement et ajustés via expériment
 
 ### 7.5 Catalogue de modèles initial
 
-| Modèle | Capability | Use-case | Hôte |
-|---|---|---|---|
-| Llama 3.3 70B Instruct (Q5_K_M ou FP8) | GENERAL | Réponses conversationnelles, généralistes | vLLM interne |
-| DeepSeek-R1-Distill-Llama-70B | REASONING | Planning, multi-step, math | vLLM interne |
-| Qwen 2.5 Coder 32B | CODE | Génération/lecture de code | vLLM interne |
-| Mistral Small 3 (24B) | GENERAL (rapide) | Routage rapide, résumé, classification | vLLM interne |
-| BAAI/bge-large-fr (fine-tuné FR) | EMBEDDING | RAG, mémoire | vLLM interne |
-| InternVL 2.5 78B | VISION | OCR sémantique, compréhension d'images | vLLM interne |
-| Whisper large-v3 | STT | Mode vocal | dedicated GPU |
-| Mistral Large (API) | GENERAL (fallback) | Quand saturation interne | Mistral SAS (FR) |
+| Modèle                                 | Capability         | Use-case                                  | Hôte             |
+| -------------------------------------- | ------------------ | ----------------------------------------- | ---------------- |
+| Llama 3.3 70B Instruct (Q5_K_M ou FP8) | GENERAL            | Réponses conversationnelles, généralistes | vLLM interne     |
+| DeepSeek-R1-Distill-Llama-70B          | REASONING          | Planning, multi-step, math                | vLLM interne     |
+| Qwen 2.5 Coder 32B                     | CODE               | Génération/lecture de code                | vLLM interne     |
+| Mistral Small 3 (24B)                  | GENERAL (rapide)   | Routage rapide, résumé, classification    | vLLM interne     |
+| BAAI/bge-large-fr (fine-tuné FR)       | EMBEDDING          | RAG, mémoire                              | vLLM interne     |
+| InternVL 2.5 78B                       | VISION             | OCR sémantique, compréhension d'images    | vLLM interne     |
+| Whisper large-v3                       | STT                | Mode vocal                                | dedicated GPU    |
+| Mistral Large (API)                    | GENERAL (fallback) | Quand saturation interne                  | Mistral SAS (FR) |
 
 ---
 
@@ -658,16 +660,16 @@ flowchart LR
 
 ### 8.2 Les huit agents canoniques
 
-| Agent | Rôle | Modèle privilégié |
-|---|---|---|
-| **PlannerAgent** | Décompose un objectif en sous-tâches structurées | DeepSeek-R1 |
-| **ResearchAgent** | Cherche via RAG et web, synthétise | Llama 3.3 + RAG |
-| **ToolAgent** | Choisit et invoque le bon outil, parse la sortie | Llama 3.3 |
-| **CriticAgent** | Évalue une réponse candidate, propose corrections | DeepSeek-R1 |
-| **MemoryAgent** | Décide quoi sauvegarder en mémoire long-terme, à quel niveau | Mistral Small |
-| **ExecutionAgent** | Exécute un plan finalisé, en streamant les étapes | Llama 3.3 |
-| **FileUnderstandingAgent** | Comprend un document multimodal complexe | InternVL + Llama |
-| **BrowserAgent** | Navigation web autonome via headless | Llama 3.3 + outils |
+| Agent                      | Rôle                                                         | Modèle privilégié  |
+| -------------------------- | ------------------------------------------------------------ | ------------------ |
+| **PlannerAgent**           | Décompose un objectif en sous-tâches structurées             | DeepSeek-R1        |
+| **ResearchAgent**          | Cherche via RAG et web, synthétise                           | Llama 3.3 + RAG    |
+| **ToolAgent**              | Choisit et invoque le bon outil, parse la sortie             | Llama 3.3          |
+| **CriticAgent**            | Évalue une réponse candidate, propose corrections            | DeepSeek-R1        |
+| **MemoryAgent**            | Décide quoi sauvegarder en mémoire long-terme, à quel niveau | Mistral Small      |
+| **ExecutionAgent**         | Exécute un plan finalisé, en streamant les étapes            | Llama 3.3          |
+| **FileUnderstandingAgent** | Comprend un document multimodal complexe                     | InternVL + Llama   |
+| **BrowserAgent**           | Navigation web autonome via headless                         | Llama 3.3 + outils |
 
 ### 8.3 Boucle de raisonnement standard
 
@@ -727,7 +729,7 @@ flowchart TB
 
 1. **Capture** : court-terme directement en Postgres (`messages`).
 2. **Résumé épisodique** (async, fin de session ou toutes les 20 messages) : `worker-summarisation` lit la conversation, génère un résumé via Mistral Small, l'enregistre comme `memories(layer='episodic')` + embedding Qdrant.
-3. **Extraction sémantique** (async, périodique) : `MemoryAgent` parcourt les nouveaux épisodiques d'un utilisateur, extrait des *faits durables* (`"travaille chez X"`, `"préfère réponses courtes"`), les écrit en `memories(layer='semantic')` avec scoring d'importance.
+3. **Extraction sémantique** (async, périodique) : `MemoryAgent` parcourt les nouveaux épisodiques d'un utilisateur, extrait des _faits durables_ (`"travaille chez X"`, `"préfère réponses courtes"`), les écrit en `memories(layer='semantic')` avec scoring d'importance.
 4. **Long terme** : créé via `worker-ingestion` lors d'un upload, chunké, embeddé, indexé en `docs_chunks`.
 5. **Décroissance** : `decay_at` est avancé à chaque accès (`last_used_at`). Cron mensuel archive les souvenirs non touchés depuis 12 mois (déplacement vers cold storage, retirables sur demande RGPD).
 
@@ -744,7 +746,7 @@ Budget contexte fixé par tour (ex : 4k tokens pour mémoire), le service ranke 
 
 ### 9.4 Personnalisation
 
-Le profil utilisateur est un agrégat de la mémoire sémantique injecté en début de chaque conversation comme *system message contextuel*. Mis à jour de façon différée par `MemoryAgent`.
+Le profil utilisateur est un agrégat de la mémoire sémantique injecté en début de chaque conversation comme _system message contextuel_. Mis à jour de façon différée par `MemoryAgent`.
 
 ---
 
@@ -779,13 +781,14 @@ flowchart LR
 ### 10.3 Découpage
 
 Stratégie en cascade :
+
 1. **Structurel** : par titres/sections quand le format le permet.
 2. **Sémantique** : sinon, découpage par fenêtre glissante (chunks 800 tokens, chevauchement 100) avec respect des frontières de phrase.
 3. **Tableaux** : extraits en Markdown comme chunks autonomes.
 
 ### 10.4 Récupération contextuelle (Anthropic-style)
 
-Avant embedding, chaque chunk est *augmenté* d'un court résumé de son contexte dans le document parent (généré par Mistral Small, mis en cache). Cela améliore significativement la pertinence au prix d'une ingestion légèrement plus coûteuse.
+Avant embedding, chaque chunk est _augmenté_ d'un court résumé de son contexte dans le document parent (généré par Mistral Small, mis en cache). Cela améliore significativement la pertinence au prix d'une ingestion légèrement plus coûteuse.
 
 ### 10.5 Récupération hybride
 
@@ -837,15 +840,15 @@ sequenceDiagram
 
 ```typescript
 type StreamEvent =
-  | { type: 'token', text: string, messageId: string }
-  | { type: 'agent_started', agent: string, runId: string }
-  | { type: 'agent_thought', agent: string, summary: string }
-  | { type: 'tool_called', tool: string, args: any }
-  | { type: 'tool_result', tool: string, ok: boolean, summary: string }
-  | { type: 'memory_recall', count: number }
-  | { type: 'rag_hit', docs: Array<{id:string, score:number}> }
-  | { type: 'error', code: string, message: string }
-  | { type: 'done', messageId: string }
+  | { type: 'token'; text: string; messageId: string }
+  | { type: 'agent_started'; agent: string; runId: string }
+  | { type: 'agent_thought'; agent: string; summary: string }
+  | { type: 'tool_called'; tool: string; args: any }
+  | { type: 'tool_result'; tool: string; ok: boolean; summary: string }
+  | { type: 'memory_recall'; count: number }
+  | { type: 'rag_hit'; docs: Array<{ id: string; score: number }> }
+  | { type: 'error'; code: string; message: string }
+  | { type: 'done'; messageId: string };
 ```
 
 ### 11.4 Backpressure, reprise
@@ -860,16 +863,16 @@ type StreamEvent =
 
 ### 12.1 Hébergement EU
 
-| Plan | Fournisseur recommandé | Alternative |
-|---|---|---|
-| **Plan de contrôle** (K8s, apps, bases) | Scaleway Kapsule (Paris/Amsterdam) | OVHcloud Managed K8s |
-| **Plan d'inférence** (GPU) | Bare-metal Scaleway H100/L40S | Colo + serveurs OVH Advance |
-| **Stockage objet** | Scaleway Object Storage (Paris) | OVH Object Storage |
-| **Stockage cold/backup** | OVH Cloud Archive | Self-hosted MinIO secondaire |
-| **DNS** | Gandi (FR) | Bookmyname / Online.net |
-| **CDN** | BunnyCDN (SI, EU) | Gcore (LUX) |
-| **Email transactionnel** | Brevo (FR) / Mailjet (FR) | OVH Email Pro |
-| **CI runners** | Self-hosted sur Scaleway DEV instances | OVH Public Cloud |
+| Plan                                    | Fournisseur recommandé                 | Alternative                  |
+| --------------------------------------- | -------------------------------------- | ---------------------------- |
+| **Plan de contrôle** (K8s, apps, bases) | Scaleway Kapsule (Paris/Amsterdam)     | OVHcloud Managed K8s         |
+| **Plan d'inférence** (GPU)              | Bare-metal Scaleway H100/L40S          | Colo + serveurs OVH Advance  |
+| **Stockage objet**                      | Scaleway Object Storage (Paris)        | OVH Object Storage           |
+| **Stockage cold/backup**                | OVH Cloud Archive                      | Self-hosted MinIO secondaire |
+| **DNS**                                 | Gandi (FR)                             | Bookmyname / Online.net      |
+| **CDN**                                 | BunnyCDN (SI, EU)                      | Gcore (LUX)                  |
+| **Email transactionnel**                | Brevo (FR) / Mailjet (FR)              | OVH Email Pro                |
+| **CI runners**                          | Self-hosted sur Scaleway DEV instances | OVH Public Cloud             |
 
 Le choix d'avoir un fournisseur **français** pour le contrôle et un fournisseur **français ou européen proche** pour les GPU est un compromis coût/sovereignty (les H100 sont rares ; rester strict France peut coûter cher).
 
@@ -916,12 +919,12 @@ Cluster: control-prod (Scaleway Kapsule, 3 AZ Paris)
 
 ### 13.1 Environnements
 
-| Env | Cluster | Données | Accès |
-|---|---|---|---|
-| **dev** | local (kind/k3d) ou namespace dans staging | seeds | ingés |
-| **staging** | cluster réduit identique à prod | synthétique + opt-in anonymisé | ingés |
-| **prod** | clusters prod (contrôle + GPU) | réelles | restreint, JIT |
-| **prod-canary** | namespace dans prod avec routage 5 % | réelles | observé |
+| Env             | Cluster                                    | Données                        | Accès          |
+| --------------- | ------------------------------------------ | ------------------------------ | -------------- |
+| **dev**         | local (kind/k3d) ou namespace dans staging | seeds                          | ingés          |
+| **staging**     | cluster réduit identique à prod            | synthétique + opt-in anonymisé | ingés          |
+| **prod**        | clusters prod (contrôle + GPU)             | réelles                        | restreint, JIT |
+| **prod-canary** | namespace dans prod avec routage 5 %       | réelles                        | observé        |
 
 ### 13.2 GitOps
 
@@ -931,24 +934,24 @@ Cluster: control-prod (Scaleway Kapsule, 3 AZ Paris)
 
 ### 13.3 Stratégies de déploiement
 
-| Service | Stratégie |
-|---|---|
-| Stateless (edge-api, realtime, ai-core) | Rolling update + canary 5 %/30 min via Argo Rollouts |
-| Inference router | Blue/green (parce que tient à l'état des connexions vLLM) |
-| vLLM | Blue/green sur changement de modèle ; rolling si juste config |
-| Postgres | Manuel + runbook ; jamais auto |
-| Workers | Rolling, drain doux (attendre fin de job courant) |
+| Service                                 | Stratégie                                                     |
+| --------------------------------------- | ------------------------------------------------------------- |
+| Stateless (edge-api, realtime, ai-core) | Rolling update + canary 5 %/30 min via Argo Rollouts          |
+| Inference router                        | Blue/green (parce que tient à l'état des connexions vLLM)     |
+| vLLM                                    | Blue/green sur changement de modèle ; rolling si juste config |
+| Postgres                                | Manuel + runbook ; jamais auto                                |
+| Workers                                 | Rolling, drain doux (attendre fin de job courant)             |
 
 ### 13.4 Migrations de schéma
 
 - Atlas génère des migrations à partir du schéma déclaratif (`infrastructure/db/schema.sql`).
-- Pipeline CI vérifie qu'aucune migration n'est *destructrice* sans tag explicite `breaking:true`.
+- Pipeline CI vérifie qu'aucune migration n'est _destructrice_ sans tag explicite `breaking:true`.
 - Migrations appliquées **avant** déploiement du code qui en dépend (deux PRs si besoin).
 
 ### 13.5 Rollback
 
 - Argo Rollouts permet rollback en 1 clic pour les services stateless.
-- Schéma Postgres : pas de rollback automatique. Toute migration breaking doit être *décomposée* en migrations expand + contract (pattern parallel change).
+- Schéma Postgres : pas de rollback automatique. Toute migration breaking doit être _décomposée_ en migrations expand + contract (pattern parallel change).
 
 ---
 
@@ -998,13 +1001,13 @@ flowchart LR
 
 ### 15.1 Stack
 
-| Signal | Outil | Stockage |
-|---|---|---|
-| Traces | OpenTelemetry → Tempo | objet (MinIO) |
-| Métriques | OpenTelemetry → Mimir (ou Prometheus + Thanos) | objet |
-| Logs | OpenTelemetry → Loki | objet |
-| UI | Grafana | — |
-| Alerting | Alertmanager → PagerDuty EU (ou OnCall self-hosted Grafana) | — |
+| Signal    | Outil                                                       | Stockage      |
+| --------- | ----------------------------------------------------------- | ------------- |
+| Traces    | OpenTelemetry → Tempo                                       | objet (MinIO) |
+| Métriques | OpenTelemetry → Mimir (ou Prometheus + Thanos)              | objet         |
+| Logs      | OpenTelemetry → Loki                                        | objet         |
+| UI        | Grafana                                                     | —             |
+| Alerting  | Alertmanager → PagerDuty EU (ou OnCall self-hosted Grafana) | —             |
 
 Tout en self-hosted EU. Aucun Datadog, aucun Splunk hosted.
 
@@ -1067,7 +1070,7 @@ Un trace d'une requête utilisateur traverse : `gateway → orchestrator → mem
 ### 16.5 Conformité
 
 - **RGPD** : registre des traitements, export et suppression utilisateur, base légale documentée par feature.
-- **AI Act EU** : tenue d'un *system card* et journal des évaluations modèle ; classification du risque (assistant général = risque limité, transparence requise).
+- **AI Act EU** : tenue d'un _system card_ et journal des évaluations modèle ; classification du risque (assistant général = risque limité, transparence requise).
 - **Audit** : journaux immuables pour actions admin et accès aux données utilisateur (WORM bucket MinIO + Loki retention longue).
 
 ---
@@ -1091,11 +1094,11 @@ Un trace d'une requête utilisateur traverse : `gateway → orchestrator → mem
 
 ### 17.3 Jalons
 
-| Phase | Utilisateurs actifs | Architecture |
-|---|---|---|
-| MVP | 1k | Cluster contrôle 3 nœuds, ~10 GPU, single-AZ |
-| Growth | 100k | Cluster contrôle multi-pool, ~80 GPU, multi-AZ Paris, répliques Postgres |
-| Scale | 1M+ | Multi-cluster GPU (Paris + Amsterdam), sharding Postgres, edge SSE multi-région EU |
+| Phase  | Utilisateurs actifs | Architecture                                                                       |
+| ------ | ------------------- | ---------------------------------------------------------------------------------- |
+| MVP    | 1k                  | Cluster contrôle 3 nœuds, ~10 GPU, single-AZ                                       |
+| Growth | 100k                | Cluster contrôle multi-pool, ~80 GPU, multi-AZ Paris, répliques Postgres           |
+| Scale  | 1M+                 | Multi-cluster GPU (Paris + Amsterdam), sharding Postgres, edge SSE multi-région EU |
 
 ---
 
@@ -1111,11 +1114,11 @@ Un trace d'une requête utilisateur traverse : `gateway → orchestrator → mem
 
 ### 18.2 Estimation indicative (ordres de grandeur, hors RH)
 
-| Phase | GPU (H100/L40S loués EU) | Reste infra | Total mensuel ~ |
-|---|---|---|---|
-| MVP | 8 H100 + 4 L40S ≈ 15-20 k€ | 2-3 k€ | **~20 k€** |
-| Growth | 60 H100 + 20 L40S ≈ 100-130 k€ | 10-15 k€ | **~130 k€** |
-| Scale | 300+ H100 ≈ 500 k€ | 40-60 k€ | **~550 k€** |
+| Phase  | GPU (H100/L40S loués EU)       | Reste infra | Total mensuel ~ |
+| ------ | ------------------------------ | ----------- | --------------- |
+| MVP    | 8 H100 + 4 L40S ≈ 15-20 k€     | 2-3 k€      | **~20 k€**      |
+| Growth | 60 H100 + 20 L40S ≈ 100-130 k€ | 10-15 k€    | **~130 k€**     |
+| Scale  | 300+ H100 ≈ 500 k€             | 40-60 k€    | **~550 k€**     |
 
 Comparatif : un acteur équivalent sur API OpenAI/Anthropic au volume Growth dépenserait 5-10× plus en pure inférence — c'est le levier économique principal de l'auto-hébergement (compensé par la complexité ops).
 
@@ -1141,20 +1144,20 @@ Comparatif : un acteur équivalent sur API OpenAI/Anthropic au volume Growth dé
 
 ### Annexe A — Décisions architecturales (résumé)
 
-| ADR | Décision | Pourquoi |
-|---|---|---|
-| ADR-001 | Pas d'entraînement de modèle fondation | Capital trop élevé, différenciation ailleurs |
-| ADR-002 | Souveraineté EU-hybride | Marché cible + AI Act + RGPD |
-| ADR-003 | Monorepo Turborepo + pnpm | Vélocité petite équipe |
-| ADR-004 | 15 services logiques, 6 binaires Jour-1 | Coût ops vs clarté logique |
-| ADR-005 | GraphQL côté client, gRPC interne, NATS asynchrone | Bon outil pour chaque rôle |
-| ADR-006 | vLLM comme runtime d'inférence unique | Maturité, débit, ergonomie |
-| ADR-007 | bge-large-fr pour embeddings | Bonne qualité FR, taille raisonnable, license OK |
-| ADR-008 | SSE par défaut, WS pour vocal/collab | Simplicité et robustesse |
-| ADR-009 | Argo CD + Helm | Standard CNCF, GitOps mature |
-| ADR-010 | Firecracker pour sandboxing tool | Isolation forte, démarrage ms |
-| ADR-011 | GitHub avec runners auto-hébergés EU | Pragmatisme dev experience |
-| ADR-012 | Vault + Cosign + Trivy + SBOM | Supply chain minimum sérieux |
+| ADR     | Décision                                           | Pourquoi                                         |
+| ------- | -------------------------------------------------- | ------------------------------------------------ |
+| ADR-001 | Pas d'entraînement de modèle fondation             | Capital trop élevé, différenciation ailleurs     |
+| ADR-002 | Souveraineté EU-hybride                            | Marché cible + AI Act + RGPD                     |
+| ADR-003 | Monorepo Turborepo + pnpm                          | Vélocité petite équipe                           |
+| ADR-004 | 15 services logiques, 6 binaires Jour-1            | Coût ops vs clarté logique                       |
+| ADR-005 | GraphQL côté client, gRPC interne, NATS asynchrone | Bon outil pour chaque rôle                       |
+| ADR-006 | vLLM comme runtime d'inférence unique              | Maturité, débit, ergonomie                       |
+| ADR-007 | bge-large-fr pour embeddings                       | Bonne qualité FR, taille raisonnable, license OK |
+| ADR-008 | SSE par défaut, WS pour vocal/collab               | Simplicité et robustesse                         |
+| ADR-009 | Argo CD + Helm                                     | Standard CNCF, GitOps mature                     |
+| ADR-010 | Firecracker pour sandboxing tool                   | Isolation forte, démarrage ms                    |
+| ADR-011 | GitHub avec runners auto-hébergés EU               | Pragmatisme dev experience                       |
+| ADR-012 | Vault + Cosign + Trivy + SBOM                      | Supply chain minimum sérieux                     |
 
 ### Annexe B — Glossaire étendu
 
@@ -1162,7 +1165,7 @@ Comparatif : un acteur équivalent sur API OpenAI/Anthropic au volume Growth dé
 
 ### Annexe C — Pour aller plus loin
 
-- *Designing Data-Intensive Applications*, Martin Kleppmann (base distribuée).
+- _Designing Data-Intensive Applications_, Martin Kleppmann (base distribuée).
 - vLLM docs : <https://docs.vllm.ai>
 - Anthropic — Contextual Retrieval blog post (RAG).
 - NATS JetStream docs.

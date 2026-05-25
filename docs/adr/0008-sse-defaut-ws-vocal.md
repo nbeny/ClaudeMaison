@@ -24,14 +24,17 @@ SSE (Server-Sent Events) et WebSocket sont les deux options sérieuses. Beaucoup
 ## Conséquences
 
 **Positives** :
+
 - Implémentation client triviale (`EventSource` natif navigateur).
 - Reconnexion automatique avec `Last-Event-ID`.
 - Compatible avec tous les proxys HTTP standard.
 
 **Négatives** :
+
 - Limite browser de ~6 connexions SSE par domaine → mitigé par HTTP/2 (multiplexing).
 - Pas de bidirectionnel → impose WS pour les cas voix/collab (acceptable).
 
 **Engagements** :
+
 - Tout évènement streamé porte un ID monotone pour permettre la reprise.
 - Buffer Redis Stream conservé 1 heure pour permettre reconnexion ; au-delà, fallback REST `GET /conversations/:id/messages?since=…`.

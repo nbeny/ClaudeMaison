@@ -83,7 +83,9 @@ describe('billing usage_events — intégration', () => {
 
   it('roundtrip JSONB metadata : on relit ce qu’on a écrit', async () => {
     const meta = { agent: 'planner', model: 'mistral-large' };
-    await rig.billing.recordUsage([event({ idempotencyKey: 'with-meta', metadata: meta })]);
+    await rig.billing.recordUsage([
+      event({ idempotencyKey: 'with-meta', metadata: meta }),
+    ]);
 
     const rows = await admin<{ metadata: Record<string, string> }[]>`
       SELECT metadata FROM billing.usage_events WHERE idempotency_key='with-meta'

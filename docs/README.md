@@ -2,12 +2,12 @@
 
 Documentation vivante du projet.
 
-| Dossier | Contenu |
-|---|---|
-| `architecture/` | document d'architecture étoile-polaire (vision à 18 mois) |
-| `adr/` | Architecture Decision Records — une décision structurante = un ADR |
-| `specs/` | specs détaillées par service (à venir, créées au démarrage de chaque service) |
-| `runbooks/` | procédures ops (incidents, déploiement, restore, rotation de secrets) |
+| Dossier         | Contenu                                                                       |
+| --------------- | ----------------------------------------------------------------------------- |
+| `architecture/` | document d'architecture étoile-polaire (vision à 18 mois)                     |
+| `adr/`          | Architecture Decision Records — une décision structurante = un ADR            |
+| `specs/`        | specs détaillées par service (à venir, créées au démarrage de chaque service) |
+| `runbooks/`     | procédures ops (incidents, déploiement, restore, rotation de secrets)         |
 
 ## Conventions
 

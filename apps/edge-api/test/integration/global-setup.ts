@@ -54,9 +54,9 @@ export async function setup(): Promise<void> {
 
   // Logger explicite : utile quand un test échoue, on voit dans quels
   // containers ils tournaient.
-  // eslint-disable-next-line no-console
+
   console.log(`[integration] postgres → ${process.env.DATABASE_URL}`);
-  // eslint-disable-next-line no-console
+
   console.log(`[integration] redis    → ${process.env.REDIS_URL}`);
 }
 

@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  HttpException,
-  HttpStatus,
-  Logger,
-} from '@nestjs/common';
+import { Controller, Get, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { RedisService } from '../../redis/redis.service';
 
@@ -41,14 +35,20 @@ export class HealthController {
   @Get('ready')
   async readiness(): Promise<ReadyResponse> {
     const [pg, rd] = await Promise.all([
-      this.db.ping().then(() => 'ok' as const).catch((err) => {
-        this.logger.warn({ err }, 'Postgres ping a échoué.');
-        return 'fail' as const;
-      }),
-      this.redis.ping().then(() => 'ok' as const).catch((err) => {
-        this.logger.warn({ err }, 'Redis ping a échoué.');
-        return 'fail' as const;
-      }),
+      this.db
+        .ping()
+        .then(() => 'ok' as const)
+        .catch((err) => {
+          this.logger.warn({ err }, 'Postgres ping a échoué.');
+          return 'fail' as const;
+        }),
+      this.redis
+        .ping()
+        .then(() => 'ok' as const)
+        .catch((err) => {
+          this.logger.warn({ err }, 'Redis ping a échoué.');
+          return 'fail' as const;
+        }),
     ]);
     const checks = { postgres: pg, redis: rd };
     if (pg === 'fail' || rd === 'fail') {

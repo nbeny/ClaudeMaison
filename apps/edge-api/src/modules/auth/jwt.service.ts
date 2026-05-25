@@ -16,9 +16,7 @@ export class JwtService {
   private readonly accessTtlSeconds: number;
 
   constructor(config: ConfigService<Env, true>) {
-    this.key = new TextEncoder().encode(
-      config.get('JWT_SIGNING_KEY', { infer: true }),
-    );
+    this.key = new TextEncoder().encode(config.get('JWT_SIGNING_KEY', { infer: true }));
     this.issuer = config.get('JWT_ISSUER', { infer: true });
     this.audience = config.get('JWT_AUDIENCE', { infer: true });
     this.accessTtlSeconds = config.get('JWT_ACCESS_TTL_SECONDS', { infer: true });

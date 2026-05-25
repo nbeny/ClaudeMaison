@@ -29,7 +29,6 @@ let sdk: NodeSDK | null = null;
 export function startTelemetry(): void {
   const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
   if (!endpoint) {
-    // eslint-disable-next-line no-console
     console.log('[otel] OTEL_EXPORTER_OTLP_ENDPOINT absent — télémétrie désactivée.');
     return;
   }
@@ -75,7 +74,7 @@ export function startTelemetry(): void {
   });
 
   sdk.start();
-  // eslint-disable-next-line no-console
+
   console.log(`[otel] télémétrie active → ${endpoint} (service=${serviceName})`);
 }
 
@@ -84,7 +83,6 @@ export async function shutdownTelemetry(): Promise<void> {
   try {
     await sdk.shutdown();
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('[otel] échec du shutdown SDK :', err);
   } finally {
     sdk = null;

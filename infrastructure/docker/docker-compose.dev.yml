@@ -19,7 +19,11 @@ services:
       # commande supplémentaire.
       - ../db/schema.sql:/docker-entrypoint-initdb.d/00-schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-claudemaison} -d ${POSTGRES_DB:-claudemaison}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-claudemaison} -d ${POSTGRES_DB:-claudemaison}",
+        ]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -167,7 +171,7 @@ services:
     restart: unless-stopped
     profiles: ["obs", "full"]
     command: ["-config.file=/etc/tempo/tempo.yaml"]
-    user: "0:0"  # Tempo a besoin d'écrire dans /var/tempo (volume root par défaut).
+    user: "0:0" # Tempo a besoin d'écrire dans /var/tempo (volume root par défaut).
     volumes:
       - ../observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
       - tempo-data:/var/tempo
@@ -203,7 +207,7 @@ services:
       - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     ports:
-      - "3001:3000"  # 3000 est pris par edge-api en dev local.
+      - "3001:3000" # 3000 est pris par edge-api en dev local.
     depends_on:
       prometheus:
         condition: service_started
