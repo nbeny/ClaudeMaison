@@ -33,17 +33,25 @@ from inference_router.router import BackendPick, BackendRouter
 log = get_logger('inference-router')
 
 
-def create_app(router: BackendRouter | None = None) -> FastAPI:
+def create_app(
+    router: BackendRouter | None = None,
+    http_client: httpx.AsyncClient | None = None,
+) -> FastAPI:
     settings = get_settings()
     router = router or BackendRouter(parse_model_backends(settings.MODEL_BACKENDS))
-    client = httpx.AsyncClient(timeout=settings.BACKEND_TIMEOUT_S)
+    # Si le caller fournit un client (typiquement les tests avec MockTransport),
+    # on ne le possède PAS : pas de close au teardown du lifespan, sinon le
+    # client serait fermé sous les pieds du caller.
+    client_owned = http_client is None
+    client = http_client or httpx.AsyncClient(timeout=settings.BACKEND_TIMEOUT_S)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         try:
             yield
         finally:
-            await client.aclose()
+            if client_owned:
+                await client.aclose()
 
     app = FastAPI(
         title='inference-router',
