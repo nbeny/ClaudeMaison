@@ -45,6 +45,6 @@ export class ConversationsResolver {
       userId: claims.sub,
       content,
     });
-    return { conversationId, ...result };
+    return Object.assign(new SendMessageResult(), { conversationId, ...result });
   }
 }
