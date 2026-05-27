@@ -249,7 +249,17 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-claudemaison}:${POSTGRES_PASSWORD:-claudemaison}@postgres:5432/${POSTGRES_DB:-claudemaison}
       REDIS_URL: redis://redis:6379/0
-      AI_CORE_GRPC_URL: ai-core:5002
+      # JWT — partagés avec realtime (HS256). Les defaults 32+ caractères
+      # suffisent au dev local ; surcharger via .env.dev en CI/staging.
+      JWT_ISSUER: ${JWT_ISSUER:-claudemaison-edge-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-claudemaison-clients}
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-dev-shared-jwt-signing-key-32chars-padding}
+      # Secret service-à-service (header x-internal-secret) consommé par
+      # realtime pour l'ACL conv. MUST matcher la valeur côté realtime.
+      INTERNAL_SHARED_SECRET: ${INTERNAL_SHARED_SECRET:-dev-internal-shared-secret-32chars-padding}
+      # ai-core HTTP (FastAPI) — POST /v1/chat/turn/stream depuis sendMessage.
+      # ai-core écoute sur 4000 (cf. service ai-core HTTP_PORT plus bas).
+      AI_CORE_URL: http://ai-core:4000
     ports:
       - "3000:3000"
       - "5001:5001"
@@ -271,6 +281,11 @@ services:
       NODE_ENV: development
       HTTP_PORT: 3100
       NATS_URL: nats://nats:4222
+      # JWT — même clé HS256 que edge-api (signature partagée).
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-dev-shared-jwt-signing-key-32chars-padding}
+      # Appels internes vers edge-api (/internal/conversations/:id/can-read).
+      EDGE_API_INTERNAL_URL: http://edge-api:3000
+      INTERNAL_SHARED_SECRET: ${INTERNAL_SHARED_SECRET:-dev-internal-shared-secret-32chars-padding}
     ports:
       - "3100:3100"
     depends_on:
@@ -293,6 +308,10 @@ services:
       NATS_URL: nats://nats:4222
       QDRANT_URL: http://qdrant:6333
       LLM_BASE_URL: http://inference-router:4200/v1
+      # Doit matcher un nom déclaré dans inference-router MODEL_BACKENDS.
+      # Le code default `mistral-large-instruct` ne correspond à aucun
+      # backend Phase 1 — on force l'alias llama.cpp ici.
+      LLM_DEFAULT_MODEL: ${LLM_DEFAULT_MODEL:-mistral-7b-instruct-q4}
     ports:
       - "4000:4000"
       - "5002:5002"
