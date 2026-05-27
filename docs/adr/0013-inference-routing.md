@@ -9,7 +9,7 @@
 ## Décision
 
 1. **Configuration par modèle** : chaque modèle logique a une liste de backends, chacun avec un `priority` (entier ; `0` = priorité la plus haute) :
-   ````yaml
+   ```yaml
    # MODEL_BACKENDS_YAML (monté en config map)
    mistral-7b-instruct-q4:
      - url: http://llama-cpp-1:8080      # primaire
@@ -19,7 +19,7 @@
      - url: https://api.mistral.ai       # fallback si tous les locaux KO
        priority: 1
        api_key_env: MISTRAL_API_KEY
-   ````
+   ```
 
 2. **Algorithme** : round-robin parmi les backends de plus haute priorité (`priority` le plus bas). Si tous échouent (timeout ou 5xx) → descendre d'un cran. Si la dernière priorité échoue → 503 au client.
 
