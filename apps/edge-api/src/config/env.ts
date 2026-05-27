@@ -55,6 +55,11 @@ const EnvSchema = z
     BILLING_GRPC_PORT: z.coerce.number().int().positive().default(5001),
     BILLING_GRPC_TOKEN: z.string().min(32).optional(),
 
+    // ai-core (Python FastAPI). edge-api appelle POST /v1/chat/turn/stream
+    // en fire-and-forget depuis la mutation sendMessage. La valeur par défaut
+    // pointe sur le service docker-compose interne.
+    AI_CORE_URL: z.string().url().default('http://ai-core:5001'),
+
     GIT_COMMIT: z.string().optional(),
   })
   .superRefine((env, ctx) => {
