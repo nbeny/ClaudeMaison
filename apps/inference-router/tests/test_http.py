@@ -7,13 +7,14 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 
+from inference_router.config import BackendConfig
 from inference_router.http import create_app
 from inference_router.router import BackendRouter
 
 
 @pytest.fixture
 def app_with_backend() -> TestClient:
-    router = BackendRouter({'mistral-large': ['http://vllm.test:8000']})
+    router = BackendRouter({'mistral-large': [BackendConfig(url='http://vllm.test:8000')]})
     return TestClient(create_app(router=router))
 
 
