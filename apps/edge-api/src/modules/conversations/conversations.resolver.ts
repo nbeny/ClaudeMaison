@@ -8,6 +8,8 @@ import { ConversationsService } from './conversations.service';
 @ObjectType()
 export class SendMessageResult {
   @Field(() => ID)
+  conversationId!: string;
+  @Field(() => ID)
   userMessageId!: string;
   @Field(() => ID)
   assistantMessageId!: string;
@@ -43,6 +45,6 @@ export class ConversationsResolver {
       userId: claims.sub,
       content,
     });
-    return Object.assign(new SendMessageResult(), result);
+    return { conversationId, ...result };
   }
 }
