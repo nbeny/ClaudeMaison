@@ -39,6 +39,26 @@ uv run ruff check . && uv run ruff format --check .
 uv run mypy src
 ```
 
+## Démarrage local (llama.cpp + Mistral fallback)
+
+Le routage Phase 1 attend un backend `llama-cpp` accessible sur
+`http://llama-cpp:8080` (cf. `infrastructure/docker/docker-compose.dev.yml`,
+profil `gpu`). Une fois la stack démarrée avec `--profile gpu`, télécharger
+le modèle GGUF (une seule fois ; le volume `llama-models` est persistant) :
+
+```bash
+docker compose -f infrastructure/docker/docker-compose.dev.yml exec llama-cpp \
+  curl -L -o /models/mistral-7b-instruct-v0.3.Q4_K_M.gguf \
+  https://huggingface.co/MaziyarPanahi/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3.Q4_K_M.gguf
+```
+
+Puis relance le service `llama-cpp` pour qu'il monte le modèle :
+`docker compose restart llama-cpp`.
+
+Fallback Mistral (cloud EU) : poser `MISTRAL_API_KEY` dans
+`infrastructure/docker/.env.dev`. Sans clé, `inference-router` ne sert
+que le backend local.
+
 ## Limites Jour-1
 
 - Pas de health-check actif des backends — un backend down sort de la rotation

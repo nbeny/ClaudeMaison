@@ -367,12 +367,44 @@ services:
     environment:
       NODE_ENV: development
       HTTP_PORT: 4200
-      # En dev sans backend LLM réel, on laisse vide → /v1/models renvoie []
-      # et toute requête de complétion renvoie 404. Pour pointer vers Ollama :
-      # MODEL_BACKENDS=mistral-large-instruct=http://host.docker.internal:11434
-      MODEL_BACKENDS: ${MODEL_BACKENDS:-}
+      # Routage Phase 1 : llama.cpp local en primary (prio 0), Mistral cloud
+      # EU en fallback (prio 1, déclenché seulement si MISTRAL_API_KEY est set
+      # via .env.dev). Surchargeable via la var MODEL_BACKENDS du .env.dev.
+      MODEL_BACKENDS: ${MODEL_BACKENDS:-mistral-7b-instruct-q4=http://llama-cpp:8080|prio:0,mistral=https://api.mistral.ai|prio:1|env:MISTRAL_API_KEY}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
     ports:
       - "4200:4200"
+
+  # Backend LLM local pour le routage Phase 1 (cf. ADR-0006 + ADR-0013).
+  # Profil `gpu` opt-in : nécessite un GPU AMD ROCm exposé via /dev/kfd
+  # + /dev/dri + groupe video. Sans GPU, l'inference-router bascule sur
+  # le fallback Mistral grâce au prio dans MODEL_BACKENDS.
+  llama-cpp:
+    image: ghcr.io/ggerganov/llama.cpp:server-rocm
+    container_name: cm-llama-cpp
+    restart: unless-stopped
+    profiles: ["gpu"]
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    group_add: ["video"]
+    environment:
+      LLAMA_ARG_MODEL: /models/mistral-7b-instruct-v0.3.Q4_K_M.gguf
+      LLAMA_ARG_HOST: 0.0.0.0
+      LLAMA_ARG_PORT: "8080"
+      LLAMA_ARG_N_GPU_LAYERS: "999"
+      LLAMA_ARG_CTX_SIZE: "4096"
+    volumes:
+      - llama-models:/models:ro
+    ports:
+      # Exposé côté host pour debug (curl /health, /v1/chat/completions
+      # directement). À retirer en prod.
+      - "8081:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
 volumes:
   postgres-data:
@@ -384,3 +416,4 @@ volumes:
   prometheus-data:
   tempo-data:
   grafana-data:
+  llama-models:
