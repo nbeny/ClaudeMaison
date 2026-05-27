@@ -31,3 +31,4 @@ cp docs/adr/template.md docs/adr/00NN-titre-kebab.md
 | [0010](0010-firecracker-sandboxing.md)              | Firecracker pour le sandboxing des outils          | Accepté |
 | [0011](0011-github-runners-auto-heberges.md)        | GitHub avec runners auto-hébergés EU               | Accepté |
 | [0012](0012-vault-cosign-trivy-sbom.md)             | Vault + Cosign + Trivy + SBOM                      | Accepté |
+| [0013](0013-inference-routing.md)                   | Stratégie de routage inference-router              | Accepté |
