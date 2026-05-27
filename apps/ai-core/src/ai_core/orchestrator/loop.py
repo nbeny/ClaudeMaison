@@ -93,7 +93,12 @@ class Orchestrator:
             raise RuntimeError('turn_stream requires an EventPublisher')
 
         model = input.model or get_settings().LLM_DEFAULT_MODEL
-        logger.info('orchestrator.turn_stream', chat_id=input.chat_id, model=model)
+        logger.info(
+            'orchestrator.turn_stream',
+            workspace_id=input.workspace_id,
+            chat_id=input.chat_id,
+            model=model,
+        )
 
         messages = [
             ChatMessage(role='system', content=_SYSTEM_PROMPT),
@@ -101,32 +106,29 @@ class Orchestrator:
         ]
 
         tokens_in = sum(len(m.content) for m in messages) // 4  # heuristique simple
-        tokens_out = 0
-        finish: str = 'stop'
-        had_error = False
+        out_chars = 0
+        finish: Literal['stop', 'length', 'tool_call', 'error'] = 'stop'
 
         async for evt in self._inference.chat_stream(model=model, messages=messages):
             if evt.type == 'token' and evt.delta:
-                tokens_out += max(1, len(evt.delta) // 4)
+                out_chars += len(evt.delta)
                 await self._publisher.token(
                     conversation_id=input.chat_id, message_id=message_id, delta=evt.delta,
                 )
             elif evt.type == 'done':
                 finish = evt.finish_reason or 'stop'
             elif evt.type == 'error':
-                had_error = True
                 await self._publisher.error(
                     conversation_id=input.chat_id, message_id=message_id,
                     reason=evt.error or 'unknown',
                 )
                 return
 
-        if not had_error:
-            await self._publisher.done(
-                conversation_id=input.chat_id, message_id=message_id,
-                finish_reason=finish,  # type: ignore[arg-type]
-                tokens_in=tokens_in, tokens_out=tokens_out,
-            )
+        await self._publisher.done(
+            conversation_id=input.chat_id, message_id=message_id,
+            finish_reason=finish,
+            tokens_in=tokens_in, tokens_out=out_chars // 4,
+        )
 
     async def aclose(self) -> None:
         await self._inference.aclose()

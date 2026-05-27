@@ -66,3 +66,18 @@ async def test_turn_stream_emits_error_on_stream_error() -> None:
     ), message_id='m1')
     assert pub.calls[-1][0] == 'error'
     assert pub.calls[-1][1]['reason'] == 'all_backends_failed'
+
+
+@pytest.mark.asyncio
+async def test_turn_stream_emits_done_when_stream_ends_silently() -> None:
+    """Si chat_stream se termine sans `done` ni `error`, on émet `done(finish='stop')`."""
+    inference = _FakeInference([
+        StreamEvent(type='token', delta='Hi'),
+    ])
+    pub = _FakePublisher()
+    orch = Orchestrator(inference=inference, publisher=pub)  # type: ignore[arg-type]
+    await orch.turn_stream(TurnInput(
+        workspace_id='w', user_id='u', chat_id='c1', message='hi',
+    ), message_id='m1')
+    assert pub.calls[-1][0] == 'done'
+    assert pub.calls[-1][1]['finish_reason'] == 'stop'
