@@ -5,8 +5,8 @@
 -- Le binaire `edge-api` possède `auth` et `billing`.
 
 -- Extensions Postgres (citext, pgcrypto) provisionnées hors d'Atlas :
--- voir infrastructure/db/init/00-extensions.sql (initdb du conteneur dev)
--- et la doc d'opérations pour le provisioning en prod.
+-- en dev via infrastructure/db/init/00-extensions.sql (initdb du conteneur).
+-- En prod, c'est le DBA / opérateur du cluster qui les crée hors-bande.
 
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS billing;
