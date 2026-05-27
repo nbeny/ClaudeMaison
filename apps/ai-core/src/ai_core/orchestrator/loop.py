@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from ai_core.config import get_settings
+from ai_core.events import EventPublisher
 from ai_core.inference import ChatMessage, InferenceClient, InferenceError
 from ai_core.logging import get_logger
 
@@ -49,8 +50,13 @@ class Orchestrator:
     Le client d'inférence est injecté pour permettre le mock en tests.
     """
 
-    def __init__(self, inference: InferenceClient | None = None) -> None:
+    def __init__(
+        self,
+        inference: InferenceClient | None = None,
+        publisher: EventPublisher | None = None,
+    ) -> None:
         self._inference = inference or InferenceClient()
+        self._publisher = publisher  # None autorisé pour les tests qui n'utilisent que turn()
 
     async def turn(self, input: TurnInput) -> TurnOutput:
         model = input.model or get_settings().LLM_DEFAULT_MODEL
@@ -81,6 +87,46 @@ class Orchestrator:
             text=completion.text,
             finish_reason=completion.finish_reason,
         )
+
+    async def turn_stream(self, input: TurnInput, *, message_id: str) -> None:
+        if self._publisher is None:
+            raise RuntimeError('turn_stream requires an EventPublisher')
+
+        model = input.model or get_settings().LLM_DEFAULT_MODEL
+        logger.info('orchestrator.turn_stream', chat_id=input.chat_id, model=model)
+
+        messages = [
+            ChatMessage(role='system', content=_SYSTEM_PROMPT),
+            ChatMessage(role='user', content=input.message),
+        ]
+
+        tokens_in = sum(len(m.content) for m in messages) // 4  # heuristique simple
+        tokens_out = 0
+        finish: str = 'stop'
+        had_error = False
+
+        async for evt in self._inference.chat_stream(model=model, messages=messages):
+            if evt.type == 'token' and evt.delta:
+                tokens_out += max(1, len(evt.delta) // 4)
+                await self._publisher.token(
+                    conversation_id=input.chat_id, message_id=message_id, delta=evt.delta,
+                )
+            elif evt.type == 'done':
+                finish = evt.finish_reason or 'stop'
+            elif evt.type == 'error':
+                had_error = True
+                await self._publisher.error(
+                    conversation_id=input.chat_id, message_id=message_id,
+                    reason=evt.error or 'unknown',
+                )
+                return
+
+        if not had_error:
+            await self._publisher.done(
+                conversation_id=input.chat_id, message_id=message_id,
+                finish_reason=finish,  # type: ignore[arg-type]
+                tokens_in=tokens_in, tokens_out=tokens_out,
+            )
 
     async def aclose(self) -> None:
         await self._inference.aclose()
