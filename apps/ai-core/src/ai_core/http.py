@@ -47,7 +47,6 @@ class _TurnStreamBody(BaseModel):
 def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
     """Factory FastAPI. Injection explicite de l'orchestrator pour les tests."""
 
-    orchestrator = orchestrator or Orchestrator()
     settings = get_settings()
 
     app = FastAPI(
@@ -62,7 +61,10 @@ def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
 
     @app.post('/v1/chat/turn', response_model=TurnResponse)
     async def turn(req: TurnRequest) -> TurnResponse:
-        out = await orchestrator.turn(
+        orch = orchestrator
+        if orch is None:
+            orch = Orchestrator()
+        out = await orch.turn(
             TurnInput(
                 workspace_id=req.workspace_id,
                 user_id=req.user_id,
@@ -85,8 +87,11 @@ def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
             (m.content for m in reversed(body.history) if m.role == 'user'),
             '',
         )
+        orch = orchestrator
+        if orch is None:
+            orch = Orchestrator()  # avec publisher None → erreur ; cas testé avec stub
         bg.add_task(
-            orchestrator.turn_stream,
+            orch.turn_stream,
             TurnInput(
                 workspace_id=body.workspaceId,
                 user_id=body.userId,
