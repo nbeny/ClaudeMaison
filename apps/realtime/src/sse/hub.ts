@@ -26,10 +26,20 @@ export class SseHub {
     const set = this.byChannel.get(channel);
     if (!set) return 0;
     let delivered = 0;
+    const dead: SseEntry[] = [];
     for (const entry of set) {
-      entry.reply.raw.write(`data: ${payload}\n\n`);
-      delivered++;
+      if (entry.reply.raw.destroyed) {
+        dead.push(entry);
+        continue;
+      }
+      try {
+        entry.reply.raw.write(`data: ${payload}\n\n`);
+        delivered++;
+      } catch {
+        dead.push(entry);
+      }
     }
+    for (const e of dead) this.remove(e);
     return delivered;
   }
 

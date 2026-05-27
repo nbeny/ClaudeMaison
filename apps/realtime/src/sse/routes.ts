@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import type { TokenVerifier } from '../auth';
+import type { TokenClaims, TokenVerifier } from '../auth';
 import type { SseHub, SseEntry } from './hub';
+
+const SSE_HEARTBEAT_MS = 15_000;
 
 export interface ConversationAcl {
   canRead(userId: string, conversationId: string): Promise<boolean>;
@@ -19,7 +21,7 @@ export function registerSseRoutes(
       reply.code(401).send({ error: 'missing token' });
       return;
     }
-    let claims: { sub: string };
+    let claims: TokenClaims;
     try {
       claims = await deps.verifier.verify(token);
     } catch {
@@ -31,6 +33,9 @@ export function registerSseRoutes(
       return;
     }
 
+    // IMPORTANT : reply.hijack() doit rester APRÈS toutes les early-returns
+    // (401/403). Une fois hijack appelé, reply.send(...) est ignoré et les
+    // erreurs HTTP ne partiraient plus au client.
     // Hijack the response so Fastify doesn't call reply.send() / end() after
     // the handler returns, which would close the SSE stream prematurely.
     reply.hijack();
@@ -52,8 +57,18 @@ export function registerSseRoutes(
     deps.hub.add(entry);
 
     const heartbeat = setInterval(() => {
-      reply.raw.write(':keepalive\n\n');
-    }, 15_000);
+      try {
+        if (reply.raw.destroyed) {
+          clearInterval(heartbeat);
+          deps.hub.remove(entry);
+          return;
+        }
+        reply.raw.write(':keepalive\n\n');
+      } catch {
+        clearInterval(heartbeat);
+        deps.hub.remove(entry);
+      }
+    }, SSE_HEARTBEAT_MS);
 
     req.raw.on('close', () => {
       clearInterval(heartbeat);

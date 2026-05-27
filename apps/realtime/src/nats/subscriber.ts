@@ -31,10 +31,10 @@ export class NatsSubscriber {
         const channel = m.subject.slice('events.'.length);
         const payload = this.codec.decode(m.data);
         for (const h of this.hubs) {
-          const delivered = h.broadcast(channel, payload);
-          if (delivered === 0) {
-            // Pas de souscripteur sur ce pod ; un autre pod realtime pourrait
-            // avoir des clients. C'est normal — NATS fan-out à tous les pods.
+          try {
+            h.broadcast(channel, payload);
+          } catch (err) {
+            this.log('hub broadcast failed', { err: String(err), channel });
           }
         }
       }
