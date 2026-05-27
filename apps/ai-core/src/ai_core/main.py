@@ -16,14 +16,21 @@ from ai_core.telemetry import start_telemetry
 
 start_telemetry()
 
+import asyncio  # noqa: E402
+
+import nats  # noqa: E402
 import uvicorn  # noqa: E402
 
 from ai_core.config import get_settings  # noqa: E402
+from ai_core.events import EventPublisher  # noqa: E402
 from ai_core.http import create_app  # noqa: E402
+from ai_core.inference import InferenceClient  # noqa: E402
 from ai_core.logging import configure_logging, get_logger  # noqa: E402
+from ai_core.orchestrator import Orchestrator  # noqa: E402
 
 
-def run() -> None:
+async def _bootstrap() -> None:
+    """Ouvre NATS, câble l'Orchestrator, démarre Uvicorn."""
     configure_logging()
     settings = get_settings()
     logger = get_logger(__name__)
@@ -33,13 +40,33 @@ def run() -> None:
         host=settings.HTTP_HOST,
         env=settings.NODE_ENV,
     )
-    uvicorn.run(
-        create_app(),
+
+    nc = await nats.connect(settings.NATS_URL)
+    publisher = EventPublisher(connection=nc)
+    orchestrator = Orchestrator(
+        inference=InferenceClient(),
+        publisher=publisher,
+    )
+
+    app = create_app(orchestrator=orchestrator)
+
+    config = uvicorn.Config(
+        app,
         host=settings.HTTP_HOST,
         port=settings.HTTP_PORT,
-        log_config=None,  # structlog gère déjà le rendu, pas de double config.
+        log_config=None,   # structlog gère déjà le rendu, pas de double config.
         access_log=False,  # OTel HTTP instrumentation produit les access logs.
     )
+    server = uvicorn.Server(config)
+    try:
+        await server.serve()
+    finally:
+        await orchestrator.aclose()
+        await nc.drain()
+
+
+def run() -> None:
+    asyncio.run(_bootstrap())
 
 
 if __name__ == '__main__':

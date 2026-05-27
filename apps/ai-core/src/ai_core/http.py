@@ -6,7 +6,7 @@ surface HTTP est utile pour les smoke tests + outils dev (curl, httpie).
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import BackgroundTasks, FastAPI
 from pydantic import BaseModel
 
 from ai_core.config import get_settings
@@ -28,6 +28,20 @@ class TurnResponse(BaseModel):
     chat_id: str
     text: str
     finish_reason: str
+
+
+class _HistoryMessage(BaseModel):
+    role: str
+    content: str
+
+
+class _TurnStreamBody(BaseModel):
+    conversationId: str
+    workspaceId: str
+    userId: str
+    messageId: str
+    model: str | None = None
+    history: list[_HistoryMessage]
 
 
 def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
@@ -62,5 +76,26 @@ def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
             text=out.text,
             finish_reason=out.finish_reason,
         )
+
+    @app.post('/v1/chat/turn/stream', status_code=202)
+    async def turn_stream(body: _TurnStreamBody, bg: BackgroundTasks) -> dict[str, str]:
+        # Dernier message user = pivot ; en Phase 1 on n'utilise pas l'history
+        # complet (passé directement dans messages[]).
+        user_msg = next(
+            (m.content for m in reversed(body.history) if m.role == 'user'),
+            '',
+        )
+        bg.add_task(
+            orchestrator.turn_stream,
+            TurnInput(
+                workspace_id=body.workspaceId,
+                user_id=body.userId,
+                chat_id=body.conversationId,
+                message=user_msg,
+                model=body.model,
+            ),
+            message_id=body.messageId,
+        )
+        return {'status': 'accepted'}
 
     return app
