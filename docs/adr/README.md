@@ -24,7 +24,7 @@ cp docs/adr/template.md docs/adr/00NN-titre-kebab.md
 | [0003](0003-monorepo-turborepo-pnpm.md)             | Monorepo Turborepo + pnpm                          | Accepté |
 | [0004](0004-15-services-logiques-6-binaires.md)     | 15 services logiques, 6 binaires Jour-1            | Accepté |
 | [0005](0005-graphql-grpc-nats.md)                   | GraphQL côté client, gRPC interne, NATS asynchrone | Accepté |
-| [0006](0006-vllm-runtime-inference.md)              | vLLM comme runtime d'inférence unique              | Accepté |
+| [0006](0006-runtime-llm.md)                         | llama.cpp + fallback Mistral API                   | Accepté |
 | [0007](0007-bge-large-fr-embeddings.md)             | bge-large-fr pour les embeddings                   | Accepté |
 | [0008](0008-sse-defaut-ws-vocal.md)                 | SSE par défaut, WebSocket pour vocal/collab        | Accepté |
 | [0009](0009-argo-cd-helm.md)                        | Argo CD + Helm pour le déploiement                 | Accepté |
