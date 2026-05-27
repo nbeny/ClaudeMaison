@@ -6,6 +6,8 @@ phone-home par défaut du SDK. httpx async, on parse juste le premier choice.
 
 from __future__ import annotations
 
+import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -34,6 +36,14 @@ class ChatCompletion:
     finish_reason: Literal['stop', 'length', 'tool_call', 'error']
     model: str
     raw: dict[str, Any]
+
+
+@dataclass(slots=True)
+class StreamEvent:
+    type: Literal['token', 'done', 'error']
+    delta: str | None = None
+    finish_reason: Literal['stop', 'length', 'tool_call', 'error'] | None = None
+    error: str | None = None
 
 
 _FINISH_REASON_MAP: dict[str, Literal['stop', 'length', 'tool_call', 'error']] = {
@@ -125,3 +135,54 @@ class InferenceClient:
             model=str(body.get('model', model)),
             raw=body,
         )
+
+    async def chat_stream(
+        self,
+        *,
+        model: str,
+        messages: list[ChatMessage],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[StreamEvent]:
+        payload: dict[str, Any] = {
+            'model': model,
+            'messages': [{'role': m.role, 'content': m.content} for m in messages],
+            'temperature': temperature,
+            'stream': True,
+        }
+        if max_tokens is not None:
+            payload['max_tokens'] = max_tokens
+
+        headers = {'Authorization': f'Bearer {self._api_key}'} if self._api_key else {}
+
+        try:
+            async with self._client.stream(
+                'POST',
+                f'{self._base_url}/chat/completions',
+                json=payload,
+                headers=headers,
+            ) as resp:
+                if resp.status_code >= 400:
+                    body = await resp.aread()
+                    yield StreamEvent(type='error', error=body.decode()[:200])
+                    return
+                async for line in resp.aiter_lines():
+                    if not line.startswith('data:'):
+                        continue
+                    data = line[len('data:') :].strip()
+                    if data == '[DONE]':
+                        continue
+                    try:
+                        evt = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    choice = (evt.get('choices') or [{}])[0]
+                    delta = (choice.get('delta') or {}).get('content')
+                    finish = choice.get('finish_reason')
+                    if delta:
+                        yield StreamEvent(type='token', delta=delta)
+                    if finish:
+                        mapped = _FINISH_REASON_MAP.get(finish, 'stop')
+                        yield StreamEvent(type='done', finish_reason=mapped)
+        except httpx.HTTPError as exc:
+            yield StreamEvent(type='error', error=f'network error: {exc}')
