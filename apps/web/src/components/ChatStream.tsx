@@ -18,24 +18,32 @@ export function ChatStream({ conversationId, ssetokenUrl }: ChatStreamProps) {
   const currentAssistantRef = useRef<{ index: number; id?: string } | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     let es: EventSource | null = null;
     (async () => {
       const tokenResp = await fetch(ssetokenUrl);
       const { token } = await tokenResp.json();
+      if (cancelled) return;
       const url = `${process.env.NEXT_PUBLIC_REALTIME_URL}/sse/v1/conversations/${conversationId}/stream?token=${encodeURIComponent(token)}`;
       es = new EventSource(url);
       es.onmessage = (evt) => {
-        const payload = JSON.parse(evt.data);
+        let payload: { type?: string; delta?: string; messageId?: string };
+        try {
+          payload = JSON.parse(evt.data);
+        } catch (err) {
+          console.warn('SSE payload not JSON', err, evt.data);
+          return;
+        }
         if (payload.type === 'token') {
           setMessages((prev) => {
             const next = [...prev];
             const cur = currentAssistantRef.current;
             const existing = cur ? next[cur.index] : undefined;
             if (cur && existing) {
-              next[cur.index] = { ...existing, content: existing.content + payload.delta };
+              next[cur.index] = { ...existing, content: existing.content + (payload.delta ?? '') };
             } else {
               currentAssistantRef.current = { index: next.length, id: payload.messageId };
-              next.push({ role: 'assistant', content: payload.delta });
+              next.push({ role: 'assistant', content: payload.delta ?? '' });
             }
             return next;
           });
@@ -44,7 +52,10 @@ export function ChatStream({ conversationId, ssetokenUrl }: ChatStreamProps) {
         }
       };
     })();
-    return () => { es?.close(); };
+    return () => {
+      cancelled = true;
+      es?.close();
+    };
   }, [conversationId, ssetokenUrl]);
 
   async function send() {
