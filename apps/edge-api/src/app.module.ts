@@ -7,6 +7,7 @@ import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { OidcModule } from './modules/auth/oidc/oidc.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { ConversationsModule } from './modules/conversations/conversations.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
 import { HealthModule } from './modules/health/health.module';
 import { MetricsModule } from './observability/metrics.module';
@@ -52,6 +53,7 @@ import { MetricsModule } from './observability/metrics.module';
     // (même schema Zod), donc loadEnv ici ne fait que re-parser sans I/O.
     OidcModule.forRoot(new ConfigService<Env, true>(loadEnv(process.env))),
     BillingModule,
+    ConversationsModule,
   ],
 })
 export class AppModule {}
