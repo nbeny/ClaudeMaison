@@ -23,6 +23,7 @@ export class HttpConversationAcl implements ConversationAcl {
     try {
       resp = await fetch(url, {
         headers: { 'x-internal-secret': this.secret },
+        signal: AbortSignal.timeout(2000),
       });
     } catch {
       return false;
