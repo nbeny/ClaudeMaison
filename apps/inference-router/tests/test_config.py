@@ -40,3 +40,8 @@ def test_parse_priority_via_pipe() -> None:
 def test_parse_rejects_empty_url() -> None:
     with pytest.raises(ValueError):
         parse_model_backends('m=')
+
+
+def test_parse_invalid_priority_raises_with_context() -> None:
+    with pytest.raises(ValueError, match='invalid priority'):
+        parse_model_backends('m=http://x|prio:abc')

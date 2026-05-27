@@ -109,22 +109,18 @@ def create_app(router: BackendRouter | None = None) -> FastAPI:
         except (httpx.ConnectError, httpx.ReadTimeout):
             log.warning(
                 'backend failed (network)',
-                extra={
-                    'backend': pick.backend.url,
-                    'provider': pick.backend.provider,
-                    'group_index': pick.group_index,
-                },
+                backend=pick.backend.url,
+                provider=pick.backend.provider,
+                group_index=pick.group_index,
             )
             return None
         if resp.status_code >= 500:
             log.warning(
                 'backend failed (5xx)',
-                extra={
-                    'backend': pick.backend.url,
-                    'provider': pick.backend.provider,
-                    'group_index': pick.group_index,
-                    'status': resp.status_code,
-                },
+                backend=pick.backend.url,
+                provider=pick.backend.provider,
+                group_index=pick.group_index,
+                status=resp.status_code,
             )
             return None
         return resp
@@ -144,22 +140,18 @@ def create_app(router: BackendRouter | None = None) -> FastAPI:
         except (httpx.ConnectError, httpx.ReadTimeout):
             log.warning(
                 'backend stream open failed (network)',
-                extra={
-                    'backend': pick.backend.url,
-                    'provider': pick.backend.provider,
-                    'group_index': pick.group_index,
-                },
+                backend=pick.backend.url,
+                provider=pick.backend.provider,
+                group_index=pick.group_index,
             )
             return None
         if resp.status_code >= 500:
             log.warning(
                 'backend stream open failed (5xx)',
-                extra={
-                    'backend': pick.backend.url,
-                    'provider': pick.backend.provider,
-                    'group_index': pick.group_index,
-                    'status': resp.status_code,
-                },
+                backend=pick.backend.url,
+                provider=pick.backend.provider,
+                group_index=pick.group_index,
+                status=resp.status_code,
             )
             await resp.aclose()
             return None

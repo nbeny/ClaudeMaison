@@ -92,7 +92,10 @@ def _parse_single_backend(raw: str) -> BackendConfig:
     for opt in options:
         key, _, value = opt.partition(':')
         if key == 'prio':
-            priority = int(value)
+            try:
+                priority = int(value)
+            except ValueError as e:
+                raise ValueError(f'invalid priority in {opt!r}') from e
         elif key == 'env':
             api_key_env = value
         else:
