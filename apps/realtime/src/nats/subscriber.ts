@@ -1,5 +1,4 @@
 import { connect, type NatsConnection, StringCodec } from 'nats';
-import type { ConnectionHub } from '../ws/hub';
 
 // Souscription minimale : on suit `events.<channel>` et on broadcaste à
 // toutes les sockets du channel correspondant. Pas de JetStream ack ici —
@@ -7,13 +6,17 @@ import type { ConnectionHub } from '../ws/hub';
 // (rejouables côté ai-core si manqués). Quand on aura besoin de garanties
 // (ex: paiement WS), on basculera sur JetStream consumer durable par user.
 
+export interface Broadcastable {
+  broadcast(channel: string, payload: string): number;
+}
+
 export class NatsSubscriber {
   private connection: NatsConnection | null = null;
   private readonly codec = StringCodec();
 
   constructor(
     private readonly url: string,
-    private readonly hub: ConnectionHub,
+    private readonly hubs: readonly Broadcastable[],
     private readonly log: (msg: string, extra?: object) => void,
   ) {}
 
@@ -27,10 +30,12 @@ export class NatsSubscriber {
         // Sujet attendu : events.<channelId>
         const channel = m.subject.slice('events.'.length);
         const payload = this.codec.decode(m.data);
-        const delivered = this.hub.broadcast(channel, payload);
-        if (delivered === 0) {
-          // Pas de souscripteur sur ce pod ; un autre pod realtime pourrait
-          // avoir des clients. C'est normal — NATS fan-out à tous les pods.
+        for (const h of this.hubs) {
+          const delivered = h.broadcast(channel, payload);
+          if (delivered === 0) {
+            // Pas de souscripteur sur ce pod ; un autre pod realtime pourrait
+            // avoir des clients. C'est normal — NATS fan-out à tous les pods.
+          }
         }
       }
     })().catch((err) => {

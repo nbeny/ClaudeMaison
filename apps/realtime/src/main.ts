@@ -7,6 +7,9 @@ import Fastify from 'fastify';
 import { TokenVerifier } from './auth';
 import { loadEnv } from './config/env';
 import { NatsSubscriber } from './nats/subscriber';
+import type { ConversationAcl } from './sse/routes';
+import { SseHub } from './sse/hub';
+import { registerSseRoutes } from './sse/routes';
 import { ConnectionHub } from './ws/hub';
 import { registerWsRoutes } from './ws/routes';
 
@@ -30,17 +33,32 @@ async function bootstrap(): Promise<void> {
   });
 
   const verifier = new TokenVerifier(env);
-  const hub = new ConnectionHub();
+  const wsHub = new ConnectionHub();
+  const sseHub = new SseHub();
 
-  app.get('/health', async () => ({ status: 'ok', connections: hub.size() }));
+  app.get('/health', async () => ({
+    status: 'ok',
+    ws: wsHub.size(),
+    sse: sseHub.size(),
+  }));
 
-  registerWsRoutes(app, { verifier, hub });
+  registerWsRoutes(app, { verifier, hub: wsHub });
 
-  const subscriber = new NatsSubscriber(env.NATS_URL, hub, (msg, extra) =>
+  // Phase 1 : ACL fine ajoutée Task 17 via GET /internal/conversations/:id/can-read.
+  // TODO(Task 17) : remplacer par un vrai appel à edge-api.
+  const aclStub: ConversationAcl = {
+    async canRead() {
+      return true;
+    },
+  };
+
+  registerSseRoutes(app, { verifier, hub: sseHub, acl: aclStub });
+
+  const subscriber = new NatsSubscriber(env.NATS_URL, [wsHub, sseHub], (msg, extra) =>
     app.log.info(extra ?? {}, msg),
   );
   // Non-bloquant : si NATS n'est pas joignable au boot, on retente en boucle
-  // côté driver. On accepte les connexions WS sans events pour l'instant
+  // côté driver. On accepte les connexions WS/SSE sans events pour l'instant
   // (Health=ok, mais events.> ne flow pas — c'est observable côté hub.size
   // versus broadcast deliveries).
   subscriber.start().catch((err) => {
