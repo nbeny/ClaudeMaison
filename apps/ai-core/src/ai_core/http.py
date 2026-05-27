@@ -6,7 +6,7 @@ surface HTTP est utile pour les smoke tests + outils dev (curl, httpie).
 
 from __future__ import annotations
 
-from fastapi import BackgroundTasks, FastAPI
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from pydantic import BaseModel
 
 from ai_core.config import get_settings
@@ -44,6 +44,32 @@ class _TurnStreamBody(BaseModel):
     history: list[_HistoryMessage]
 
 
+async def _run_stream(
+    orch: Orchestrator,
+    inp: TurnInput,
+    message_id: str,
+) -> None:
+    try:
+        await orch.turn_stream(inp, message_id=message_id)
+    except Exception as exc:
+        logger.exception(
+            'turn_stream.failed',
+            conversation_id=inp.chat_id,
+            message_id=message_id,
+            error=str(exc),
+        )
+        # On essaie d'émettre un event d'erreur côté NATS pour ne pas laisser
+        # le client SSE pendre. Si même ça échoue (NATS down), on a au moins le log.
+        try:
+            await orch.emit_error(
+                conversation_id=inp.chat_id,
+                message_id=message_id,
+                reason='internal_error',
+            )
+        except Exception:
+            logger.exception('turn_stream.error_emit_failed')
+
+
 def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
     """Factory FastAPI. Injection explicite de l'orchestrator pour les tests."""
 
@@ -63,7 +89,7 @@ def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
     async def turn(req: TurnRequest) -> TurnResponse:
         orch = orchestrator
         if orch is None:
-            orch = Orchestrator()
+            raise HTTPException(status_code=503, detail='orchestrator not configured')
         out = await orch.turn(
             TurnInput(
                 workspace_id=req.workspace_id,
@@ -81,17 +107,23 @@ def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
 
     @app.post('/v1/chat/turn/stream', status_code=202)
     async def turn_stream(body: _TurnStreamBody, bg: BackgroundTasks) -> dict[str, str]:
+        orch = orchestrator
+        if orch is None:
+            raise HTTPException(status_code=503, detail='orchestrator not configured')
         # Dernier message user = pivot ; en Phase 1 on n'utilise pas l'history
         # complet (passé directement dans messages[]).
         user_msg = next(
             (m.content for m in reversed(body.history) if m.role == 'user'),
-            '',
+            None,
         )
-        orch = orchestrator
-        if orch is None:
-            orch = Orchestrator()  # avec publisher None → erreur ; cas testé avec stub
+        if not user_msg:
+            raise HTTPException(
+                status_code=422,
+                detail='history must contain at least one user message',
+            )
         bg.add_task(
-            orch.turn_stream,
+            _run_stream,
+            orch,
             TurnInput(
                 workspace_id=body.workspaceId,
                 user_id=body.userId,
@@ -99,7 +131,7 @@ def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
                 message=user_msg,
                 model=body.model,
             ),
-            message_id=body.messageId,
+            body.messageId,
         )
         return {'status': 'accepted'}
 

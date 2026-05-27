@@ -58,6 +58,8 @@ async def _bootstrap() -> None:
         access_log=False,  # OTel HTTP instrumentation produit les access logs.
     )
     server = uvicorn.Server(config)
+    # Phase 1 : les BackgroundTasks en cours au moment du SIGTERM ne sont pas trackées.
+    # Migrer vers asyncio.TaskGroup + cancel propre en Phase 2.
     try:
         await server.serve()
     finally:

@@ -130,5 +130,14 @@ class Orchestrator:
             tokens_in=tokens_in, tokens_out=out_chars // 4,
         )
 
+    async def emit_error(
+        self, *, conversation_id: str, message_id: str, reason: str
+    ) -> None:
+        if self._publisher is None:
+            return
+        await self._publisher.error(
+            conversation_id=conversation_id, message_id=message_id, reason=reason,
+        )
+
     async def aclose(self) -> None:
         await self._inference.aclose()
