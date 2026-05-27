@@ -31,10 +31,12 @@ ACCESS_TOKEN=$(curl -s -X POST \
 test -n "$ACCESS_TOKEN" && test "$ACCESS_TOKEN" != "null" || { echo 'token KO'; exit 1; }
 
 echo '→ création de conversation'
+START_PAYLOAD=$(jq -nc --arg ws "$DEMO_WORKSPACE_ID" \
+  '{query: "mutation { startConversation(workspaceId: \"\($ws)\") }"}')
 CONV_ID=$(curl -s -X POST "$GRAPHQL_URL" \
   -H "authorization: Bearer $ACCESS_TOKEN" \
   -H 'content-type: application/json' \
-  -d "{\"query\":\"mutation { startConversation(workspaceId: \\\"$DEMO_WORKSPACE_ID\\\") }\"}" \
+  -d "$START_PAYLOAD" \
   | jq -r '.data.startConversation')
 test -n "$CONV_ID" && test "$CONV_ID" != "null" || { echo 'conv KO'; exit 1; }
 echo "conv = $CONV_ID"
@@ -48,10 +50,12 @@ SSE_PID=$!
 sleep 1
 
 echo '→ envoi du message'
+SEND_PAYLOAD=$(jq -nc --arg id "$CONV_ID" --arg content 'Bonjour' \
+  '{query: "mutation { sendMessage(conversationId: \"\($id)\", content: \"\($content)\") { assistantMessageId } }"}')
 curl -s -X POST "$GRAPHQL_URL" \
   -H "authorization: Bearer $ACCESS_TOKEN" \
   -H 'content-type: application/json' \
-  -d "{\"query\":\"mutation { sendMessage(conversationId: \\\"$CONV_ID\\\", content: \\\"Bonjour\\\") { assistantMessageId } }\"}" \
+  -d "$SEND_PAYLOAD" \
   | jq .
 
 echo '→ attente premier token (max 30 s)'
