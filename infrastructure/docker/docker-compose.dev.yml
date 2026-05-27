@@ -13,11 +13,16 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      # Extensions Postgres chargées avant le schéma applicatif :
+      # Atlas CE ne gère pas CREATE EXTENSION dans son diff, donc on
+      # provisionne citext/pgcrypto via initdb pour que le schema.sql
+      # (et les migrations Atlas en prod) puissent s'y appuyer.
+      - ../db/init/00-extensions.sql:/docker-entrypoint-initdb.d/00-extensions.sql:ro
       # Schéma déclaratif appliqué au premier démarrage (volume vide).
       # En prod, ce sont les migrations Atlas qui font foi — ce mount est
       # une commodité de dev pour avoir une base prête à l'usage sans
       # commande supplémentaire.
-      - ../db/schema.sql:/docker-entrypoint-initdb.d/00-schema.sql:ro
+      - ../db/schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
     healthcheck:
       test:
         [

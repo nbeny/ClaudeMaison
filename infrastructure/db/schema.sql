@@ -4,8 +4,9 @@
 -- Convention : un schéma Postgres par bounded context métier.
 -- Le binaire `edge-api` possède `auth` et `billing`.
 
-CREATE EXTENSION IF NOT EXISTS "citext";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- Extensions Postgres (citext, pgcrypto) provisionnées hors d'Atlas :
+-- voir infrastructure/db/init/00-extensions.sql (initdb du conteneur dev)
+-- et la doc d'opérations pour le provisioning en prod.
 
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS billing;
