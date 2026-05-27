@@ -24,6 +24,13 @@ const schema = z.object({
 
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional(),
   OTEL_SERVICE_NAME: z.string().default('realtime'),
+
+  // Edge-api URL pour l'ACL inter-services. En docker-compose : nom de
+  // service interne. Le port 3000 est celui de l'app NestJS.
+  EDGE_API_INTERNAL_URL: z.string().url().default('http://edge-api:3000'),
+  // Secret partagé avec edge-api (header `x-internal-secret`). Doit matcher
+  // INTERNAL_SHARED_SECRET côté edge-api.
+  INTERNAL_SHARED_SECRET: z.string().min(32),
 });
 
 export type Env = z.infer<typeof schema>;

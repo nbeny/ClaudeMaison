@@ -7,7 +7,7 @@ import Fastify from 'fastify';
 import { TokenVerifier } from './auth';
 import { loadEnv } from './config/env';
 import { NatsSubscriber } from './nats/subscriber';
-import type { ConversationAcl } from './sse/routes';
+import { HttpConversationAcl } from './sse/http-acl';
 import { SseHub } from './sse/hub';
 import { registerSseRoutes } from './sse/routes';
 import { ConnectionHub } from './ws/hub';
@@ -44,15 +44,12 @@ async function bootstrap(): Promise<void> {
 
   registerWsRoutes(app, { verifier, hub: wsHub });
 
-  // Phase 1 : ACL fine ajoutée Task 17 via GET /internal/conversations/:id/can-read.
-  // TODO(Task 17) : remplacer par un vrai appel à edge-api.
-  const aclStub: ConversationAcl = {
-    async canRead() {
-      return true;
-    },
-  };
+  // ACL inter-services : avant d'ouvrir un SSE, on demande à edge-api si
+  // l'user a le droit de lire la conversation. Fail-closed côté HttpAcl si
+  // edge-api est down — un 403 spurious vaut mieux qu'une fuite.
+  const acl = new HttpConversationAcl(env.EDGE_API_INTERNAL_URL, env.INTERNAL_SHARED_SECRET);
 
-  registerSseRoutes(app, { verifier, hub: sseHub, acl: aclStub });
+  registerSseRoutes(app, { verifier, hub: sseHub, acl });
 
   const subscriber = new NatsSubscriber(env.NATS_URL, [wsHub, sseHub], (msg, extra) =>
     app.log.info(extra ?? {}, msg),

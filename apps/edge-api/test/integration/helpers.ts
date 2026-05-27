@@ -45,6 +45,7 @@ export function makeTestEnv(overrides: Partial<Env> = {}): Env {
     BILLING_GRPC_HOST: '0.0.0.0',
     BILLING_GRPC_PORT: 5001,
     BILLING_GRPC_TOKEN: undefined,
+    INTERNAL_SHARED_SECRET: 'x'.repeat(32),
     AI_CORE_URL: 'http://ai-core:5001',
     GIT_COMMIT: undefined,
     ...overrides,

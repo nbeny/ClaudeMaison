@@ -7,6 +7,7 @@ import { JwtService } from './jwt.service';
 import { PasswordService } from './password.service';
 import { SessionsRepository } from './sessions.repository';
 import { UsersRepository } from './users.repository';
+import { WorkspaceMembersRepository } from './workspace-members.repository';
 
 @Module({
   providers: [
@@ -18,7 +19,8 @@ import { UsersRepository } from './users.repository';
     UsersRepository,
     SessionsRepository,
     FederatedIdentitiesRepository,
+    WorkspaceMembersRepository,
   ],
-  exports: [AuthService, JwtService, JwtAuthGuard],
+  exports: [AuthService, JwtService, JwtAuthGuard, WorkspaceMembersRepository],
 })
 export class AuthModule {}

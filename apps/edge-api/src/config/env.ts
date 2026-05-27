@@ -55,6 +55,12 @@ const EnvSchema = z
     BILLING_GRPC_PORT: z.coerce.number().int().positive().default(5001),
     BILLING_GRPC_TOKEN: z.string().min(32).optional(),
 
+    // Secret partagé pour les appels internes service-à-service (ex: realtime
+    // -> edge-api /internal/conversations/:id/can-read). Header
+    // `x-internal-secret`. Pas de défaut : doit être fourni explicitement, y
+    // compris en dev/test, pour qu'on ne « marche » jamais avec un secret vide.
+    INTERNAL_SHARED_SECRET: z.string().min(32),
+
     // ai-core (Python FastAPI). edge-api appelle POST /v1/chat/turn/stream
     // en fire-and-forget depuis la mutation sendMessage. La valeur par défaut
     // pointe sur le service docker-compose interne.

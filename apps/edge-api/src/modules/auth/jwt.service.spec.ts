@@ -18,6 +18,7 @@ function makeConfig(overrides: Partial<Env> = {}): ConfigService<Env, true> {
     ALLOWED_ORIGINS: ['http://localhost:3001'],
     BILLING_GRPC_HOST: '0.0.0.0',
     BILLING_GRPC_PORT: 5001,
+    INTERNAL_SHARED_SECRET: 'x'.repeat(32),
     AI_CORE_URL: 'http://ai-core:5001',
     OTEL_SERVICE_NAME: 'edge-api',
     ...overrides,
