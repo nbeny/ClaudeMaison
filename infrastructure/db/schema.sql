@@ -198,3 +198,44 @@ CREATE UNIQUE INDEX usage_events_idempotency_idx
 -- sur une fenêtre temporelle (la période de facturation courante).
 CREATE INDEX usage_events_workspace_kind_occurred_idx
     ON billing.usage_events (workspace_id, kind, occurred_at);
+
+-- ===========================================================================
+-- Schéma "conversations" — propriété de edge-api (lectures/écritures via
+-- mutations GraphQL ou endpoints HTTP exposés à ai-core).
+-- ===========================================================================
+CREATE SCHEMA IF NOT EXISTS conversations;
+
+-- conversations.conversations
+CREATE TABLE conversations.conversations (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES auth.workspaces(id) ON DELETE CASCADE,
+    created_by   UUID NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
+    title        TEXT,
+    model        TEXT,  -- snapshot du modèle utilisé au démarrage (nullable si pas encore fixé)
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_at   TIMESTAMPTZ
+);
+
+CREATE INDEX conversations_workspace_idx
+    ON conversations.conversations (workspace_id, updated_at DESC)
+    WHERE deleted_at IS NULL;
+
+-- conversations.messages
+-- Une conversation est une suite ordonnée de messages. On stocke le contenu en
+-- TEXT brut (markdown côté UI) ; les éventuels tool_calls vivront en JSONB
+-- quand on ajoutera les tools (Phase 3).
+CREATE TABLE conversations.messages (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID NOT NULL REFERENCES conversations.conversations(id) ON DELETE CASCADE,
+    role            TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
+    content         TEXT NOT NULL DEFAULT '',
+    finish_reason   TEXT,  -- 'stop' | 'length' | 'tool_call' | 'error' | NULL si en cours
+    tokens_in       INTEGER,
+    tokens_out      INTEGER,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX messages_conversation_idx
+    ON conversations.messages (conversation_id, created_at);
+
