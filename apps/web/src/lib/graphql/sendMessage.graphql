@@ -1,0 +1,7 @@
+mutation SendMessage($conversationId: ID!, $content: String!) {
+  sendMessage(conversationId: $conversationId, content: $content) {
+    conversationId
+    userMessageId
+    assistantMessageId
+  }
+}

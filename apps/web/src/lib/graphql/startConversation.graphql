@@ -1,0 +1,3 @@
+mutation StartConversation($workspaceId: ID!, $model: String) {
+  startConversation(workspaceId: $workspaceId, model: $model)
+}
