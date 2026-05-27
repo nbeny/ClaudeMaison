@@ -21,7 +21,7 @@
       "secret": "edge-api-dev-secret-change-in-prod",
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
+      "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
       "redirectUris": [
         "http://localhost:3000/v1/auth/oidc/callback"
