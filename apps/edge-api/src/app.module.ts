@@ -47,10 +47,14 @@ import { MetricsModule } from './observability/metrics.module';
     MetricsModule,
     HealthModule,
     GatewayModule,
-    AuthModule,
-    // Module OIDC conditionnel : forRoot lit l'env directement pour décider
-    // de l'enregistrement. L'env a déjà été validé par ConfigModule au-dessus
-    // (même schema Zod), donc loadEnv ici ne fait que re-parser sans I/O.
+    // AuthModule + OidcModule sont tous deux dynamiques pour conditionner
+    // l'enregistrement de `OidcDiscoveryService` (fourni par AuthModule pour
+    // éviter le cycle Auth↔Oidc). L'env a déjà été validé par ConfigModule
+    // au-dessus (même schema Zod), donc loadEnv ici ne fait que re-parser
+    // sans I/O. AuthModule est marqué global → les autres modules (Billing,
+    // Conversations) continuent à faire `imports: [AuthModule]` sans
+    // recevoir la version dynamique.
+    AuthModule.forRoot(new ConfigService<Env, true>(loadEnv(process.env))),
     OidcModule.forRoot(new ConfigService<Env, true>(loadEnv(process.env))),
     BillingModule,
     ConversationsModule,

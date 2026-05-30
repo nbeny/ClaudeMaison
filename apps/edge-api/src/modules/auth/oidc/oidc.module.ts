@@ -1,16 +1,19 @@
 import { DynamicModule, Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../../../config/env';
-import { AuthModule } from '../auth.module';
 import { OidcController } from './oidc.controller';
-import { OidcDiscoveryService } from './oidc-discovery.service';
 import { OidcStateStore } from './oidc-state.store';
 
 /**
  * Module OIDC, conditionnellement enregistré : si `OIDC_ISSUER_URL` n'est
- * pas défini, on n'enregistre ni controller ni service. Cela évite que le
+ * pas défini, on n'enregistre ni controller ni state-store. Cela évite que le
  * binaire échoue à booter dans les environnements où l'OIDC n'est pas utilisé
  * (CI minimale, dev local sans Keycloak, etc.).
+ *
+ * `OidcDiscoveryService` est désormais fourni par `AuthModule.forRoot` (lui
+ * aussi conditionnel) pour que `JwtService` puisse l'injecter sans cycle.
+ * `AuthModule` est marqué global → AuthService / OidcDiscoveryService sont
+ * accessibles ici sans `imports`.
  */
 @Module({})
 export class OidcModule {
@@ -24,10 +27,9 @@ export class OidcModule {
     }
     return {
       module: OidcModule,
-      imports: [AuthModule],
       controllers: [OidcController],
-      providers: [OidcDiscoveryService, OidcStateStore],
-      exports: [OidcDiscoveryService, OidcStateStore],
+      providers: [OidcStateStore],
+      exports: [OidcStateStore],
     };
   }
 }

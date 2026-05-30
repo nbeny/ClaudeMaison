@@ -7,6 +7,11 @@
 #   - stack démarrée (docker compose --profile oidc --profile apps --profile gpu up -d)
 #   - llama.cpp healthy avec le modèle GGUF téléchargé (cf. apps/inference-router/README.md)
 #   - workspace de test seedé en base avec alice comme membre (env DEMO_WORKSPACE_ID)
+#   - row auth.federated_identities (provider='oidc', subject=<alice-keycloak-sub>,
+#     user_id=<alice-local-uuid>) pour que JwtService puisse mapper le token
+#     Keycloak vers l'utilisateur local — sinon 401 "Aucune identité fédérée".
+#     En dev, fixer un "id" stable dans realm-claudemaison-dev.json côté user
+#     alice et pré-seed la row via init SQL est le chemin le plus simple.
 #   - var d'env DEMO_USER (default: alice) + DEMO_PASS (default: alice-password)
 set -euo pipefail
 
