@@ -6,12 +6,11 @@
 # Pré-requis :
 #   - stack démarrée (docker compose --profile oidc --profile apps --profile gpu up -d)
 #   - llama.cpp healthy avec le modèle GGUF téléchargé (cf. apps/inference-router/README.md)
-#   - workspace de test seedé en base avec alice comme membre (env DEMO_WORKSPACE_ID)
-#   - row auth.federated_identities (provider='oidc', subject=<alice-keycloak-sub>,
-#     user_id=<alice-local-uuid>) pour que JwtService puisse mapper le token
-#     Keycloak vers l'utilisateur local — sinon 401 "Aucune identité fédérée".
-#     En dev, fixer un "id" stable dans realm-claudemaison-dev.json côté user
-#     alice et pré-seed la row via init SQL est le chemin le plus simple.
+#   - volume postgres-data initial : infrastructure/db/init/20-dev-seed.sql crée
+#     alice/bob + federated_identities (UUIDs alignés sur realm Keycloak) +
+#     workspace c0c0c0c0-…-0001 dont alice est owner. Si tu viens d'une version
+#     antérieure du repo, `docker compose -f infrastructure/docker/docker-compose.dev.yml down -v`
+#     pour rejouer l'initdb.
 #   - var d'env DEMO_USER (default: alice) + DEMO_PASS (default: alice-password)
 set -euo pipefail
 
@@ -23,7 +22,9 @@ CLIENT_ID="${KEYCLOAK_CLIENT_ID:-edge-api}"
 CLIENT_SECRET="${KEYCLOAK_CLIENT_SECRET:-edge-api-dev-secret-change-in-prod}"
 DEMO_USER="${DEMO_USER:-alice}"
 DEMO_PASS="${DEMO_PASS:-alice-password}"
-DEMO_WORKSPACE_ID="${DEMO_WORKSPACE_ID:?must point to a workspace where $DEMO_USER is a member}"
+# Default = workspace seedé par infrastructure/db/init/20-dev-seed.sql.
+# Override pour un autre workspace (alice doit y être membre).
+DEMO_WORKSPACE_ID="${DEMO_WORKSPACE_ID:-c0c0c0c0-0000-0000-0000-000000000001}"
 
 echo '→ obtention token Keycloak'
 ACCESS_TOKEN=$(curl -s -X POST \

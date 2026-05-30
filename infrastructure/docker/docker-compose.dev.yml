@@ -29,6 +29,10 @@ services:
       # une commodité de dev pour avoir une base prête à l'usage sans
       # commande supplémentaire.
       - ../db/schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
+      # Seed dev-only : alice/bob, federated_identities Keycloak (UUIDs
+      # alignés sur realm-claudemaison-dev.json), workspace de démo.
+      # Indispensable au smoke E2E (cf. scripts/smoke-chat.sh).
+      - ../db/init/20-dev-seed.sql:/docker-entrypoint-initdb.d/20-dev-seed.sql:ro
     healthcheck:
       test:
         [

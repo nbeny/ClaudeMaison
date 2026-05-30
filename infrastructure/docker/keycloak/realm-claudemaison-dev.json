@@ -38,6 +38,7 @@
   ],
   "users": [
     {
+      "id": "aaaaaaaa-0000-0000-0000-000000000001",
       "username": "alice",
       "email": "alice@example.com",
       "emailVerified": true,
@@ -53,6 +54,7 @@
       ]
     },
     {
+      "id": "bbbbbbbb-0000-0000-0000-000000000001",
       "username": "bob",
       "email": "bob@example.com",
       "emailVerified": true,
