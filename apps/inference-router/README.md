@@ -47,13 +47,16 @@ profil `gpu`). Une fois la stack démarrée avec `--profile gpu`, télécharger
 le modèle GGUF (une seule fois ; le volume `llama-models` est persistant) :
 
 ```bash
-docker compose -f infrastructure/docker/docker-compose.dev.yml exec llama-cpp \
-  curl -L -o /models/mistral-7b-instruct-v0.3.Q4_K_M.gguf \
-  https://huggingface.co/MaziyarPanahi/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3.Q4_K_M.gguf
+make download-mistral-gguf
 ```
 
+Le script `scripts/download-mistral-gguf.sh` écrit dans le volume via un
+container `curlimages/curl` éphémère — `docker compose exec llama-cpp` ne
+fonctionne pas car le mount `/models` y est en `:ro` et l'image
+llama.cpp:server-rocm n'embarque pas curl.
+
 Puis relance le service `llama-cpp` pour qu'il monte le modèle :
-`docker compose restart llama-cpp`.
+`docker compose -f infrastructure/docker/docker-compose.dev.yml restart llama-cpp`.
 
 Fallback Mistral (cloud EU) : poser `MISTRAL_API_KEY` dans
 `infrastructure/docker/.env.dev`. Sans clé, `inference-router` ne sert
