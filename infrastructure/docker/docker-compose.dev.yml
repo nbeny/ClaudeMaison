@@ -287,9 +287,14 @@ services:
       NATS_URL: nats://nats:4222
       # JWT — même clé HS256 que edge-api (signature partagée).
       JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-dev-shared-jwt-signing-key-32chars-padding}
-      # Appels internes vers edge-api (/internal/conversations/:id/can-read).
+      # Appels internes vers edge-api : /internal/conversations/:id/can-read
+      # pour l'ACL SSE, et /internal/auth/users/by-federated-subject pour
+      # mapper le `sub` Keycloak vers l'auth.users.id local.
       EDGE_API_INTERNAL_URL: http://edge-api:3000
       INTERNAL_SHARED_SECRET: ${INTERNAL_SHARED_SECRET:-dev-internal-shared-secret-32chars-padding}
+      # Active le chemin RS256 / Keycloak (sinon seul HS256 d'edge-api passe).
+      # Indispensable au smoke E2E qui présente directement un access token IdP.
+      KEYCLOAK_ISSUER_URL: http://keycloak:8080/realms/claudemaison-dev
     ports:
       - "3100:3100"
     depends_on:

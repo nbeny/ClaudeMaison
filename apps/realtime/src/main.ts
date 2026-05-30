@@ -6,8 +6,10 @@ import fastifyWebsocket from '@fastify/websocket';
 import Fastify from 'fastify';
 import { TokenVerifier } from './auth';
 import { loadEnv } from './config/env';
+import { discoverKeycloak } from './keycloak-discovery';
 import { NatsSubscriber } from './nats/subscriber';
 import { HttpConversationAcl } from './sse/http-acl';
+import { HttpFederatedSubjectResolver } from './sse/http-federated-resolver';
 import { SseHub } from './sse/hub';
 import { registerSseRoutes } from './sse/routes';
 import { ConnectionHub } from './ws/hub';
@@ -32,7 +34,22 @@ async function bootstrap(): Promise<void> {
     options: { maxPayload: 1_048_576 },
   });
 
-  const verifier = new TokenVerifier(env);
+  // Si Keycloak est configuré, on échoue rapidement si discovery KO : un
+  // pod realtime qui démarre sans pouvoir vérifier de token RS256 serait un
+  // 401 silencieux côté smoke.
+  const keycloak = env.KEYCLOAK_ISSUER_URL
+    ? await discoverKeycloak(env.KEYCLOAK_ISSUER_URL)
+    : undefined;
+  const federatedResolver = new HttpFederatedSubjectResolver(
+    env.EDGE_API_INTERNAL_URL,
+    env.INTERNAL_SHARED_SECRET,
+  );
+  const verifier = new TokenVerifier(
+    env,
+    keycloak
+      ? { jwks: keycloak.jwks, issuer: keycloak.issuer, resolver: federatedResolver }
+      : undefined,
+  );
   const wsHub = new ConnectionHub();
   const sseHub = new SseHub();
 

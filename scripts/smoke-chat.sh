@@ -11,6 +11,9 @@
 #     workspace c0c0c0c0-…-0001 dont alice est owner. Si tu viens d'une version
 #     antérieure du repo, `docker compose -f infrastructure/docker/docker-compose.dev.yml down -v`
 #     pour rejouer l'initdb.
+#   - edge-api et realtime tournent en mode dual JWT : ils acceptent à la fois
+#     les tokens HS256 internes et les access tokens RS256 émis par Keycloak.
+#     Le smoke ci-dessous utilise directement l'access token Keycloak.
 #   - var d'env DEMO_USER (default: alice) + DEMO_PASS (default: alice-password)
 set -euo pipefail
 

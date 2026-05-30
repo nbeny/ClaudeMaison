@@ -1,6 +1,8 @@
 import { DynamicModule, Module, Provider } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../../config/env';
+import { InternalAuthGuard } from '../conversations/internal-auth.guard';
+import { AuthInternalController } from './auth-internal.controller';
 import { AuthResolver } from './auth.resolver';
 import { AuthService } from './auth.service';
 import { FederatedIdentitiesRepository } from './federated-identities.repository';
@@ -37,6 +39,11 @@ export class AuthModule {
       SessionsRepository,
       FederatedIdentitiesRepository,
       WorkspaceMembersRepository,
+      // Nécessaire pour `AuthInternalController` ci-dessous (header
+      // `x-internal-secret`). Le même guard est aussi déclaré dans
+      // ConversationsModule — chaque module a sa propre instance,
+      // c'est sans effet de bord car la classe est stateless.
+      InternalAuthGuard,
     ];
     const exportsList: Provider[] = [
       AuthService,
@@ -53,6 +60,7 @@ export class AuthModule {
     return {
       module: AuthModule,
       global: true,
+      controllers: [AuthInternalController],
       providers,
       exports: exportsList,
     };

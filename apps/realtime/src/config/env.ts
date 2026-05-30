@@ -31,6 +31,12 @@ const schema = z.object({
   // Secret partagé avec edge-api (header `x-internal-secret`). Doit matcher
   // INTERNAL_SHARED_SECRET côté edge-api.
   INTERNAL_SHARED_SECRET: z.string().min(32),
+
+  // Optionnel : URL du realm Keycloak (ex: http://keycloak:8080/realms/cm-dev).
+  // Si présent, realtime accepte aussi les access tokens RS256 émis par
+  // Keycloak en plus des tokens HS256 d'edge-api. Indispensable au smoke E2E
+  // qui présente directement un access token Keycloak (password grant).
+  KEYCLOAK_ISSUER_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof schema>;
