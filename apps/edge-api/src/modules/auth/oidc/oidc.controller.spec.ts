@@ -1,11 +1,17 @@
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
-import type { FastifyReply } from 'fastify';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from '../../../config/env';
-import type { AuthService } from '../auth.service';
+import type { AuthService, IssuedTokens } from '../auth.service';
 import { OidcController } from './oidc.controller';
 import type { OidcDiscoveryService, OidcMetadata } from './oidc-discovery.service';
 import type { OidcStateData, OidcStateStore } from './oidc-state.store';
+
+// `jose.jwtVerify` est mocké pour driver les claims du ID token sans
+// monter un IdP. Le contrôleur n'utilise que `jwtVerify` de jose.
+const { jwtVerifyMock } = vi.hoisted(() => ({ jwtVerifyMock: vi.fn() }));
+vi.mock('jose', () => ({ jwtVerify: jwtVerifyMock }));
 
 // On se concentre sur la protection open-redirect via `sanitizeReturnTo` :
 // c'est la seule logique métier de `login()` (le reste est de l'OAuth
@@ -153,5 +159,200 @@ describe('OidcController.login — pipeline state + redirect', () => {
     expect(parsed.searchParams.get('state')).toBeTruthy();
     expect(parsed.searchParams.get('nonce')).toBeTruthy();
     expect(parsed.searchParams.get('scope')).toBe('openid profile email');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Callback : on couvre les chemins de rejet (CSRF, replay, IdP mal configuré
+// ou attaquant) et le happy path. L'enjeu principal : `email_verified=false`
+// doit *toujours* être refusé sinon n'importe qui peut créer un compte à
+// l'IdP avec l'email d'une victime non vérifié et squatter son compte local.
+// ---------------------------------------------------------------------------
+
+const FAKE_REQ = {
+  headers: { 'user-agent': 'rt-test' },
+  ip: '127.0.0.1',
+} as unknown as FastifyRequest;
+
+function makeStoredState(): OidcStateData {
+  return {
+    codeVerifier: 'verifier-xyz',
+    nonce: 'nonce-abc',
+    returnTo: undefined,
+    createdAt: Date.now(),
+  };
+}
+
+function makeAuthService(): AuthService & { signinWithOidc: ReturnType<typeof vi.fn> } {
+  const issued: IssuedTokens = {
+    user: { id: 'u-1', email: 'alice@example.test' } as IssuedTokens['user'],
+    sessionId: 'sess-1',
+    accessToken: 'AT.signed.jwt',
+    refreshToken: 'RT.opaque',
+    accessTokenExpiresAt: new Date(Date.now() + 60_000),
+    refreshTokenExpiresAt: new Date(Date.now() + 600_000),
+  };
+  return {
+    signinWithOidc: vi.fn().mockResolvedValue(issued),
+  } as unknown as AuthService & { signinWithOidc: ReturnType<typeof vi.fn> };
+}
+
+describe('OidcController.callback — chemins de rejet', () => {
+  let store: ReturnType<typeof makeStateStore>;
+  let reply: ReturnType<typeof makeReply>;
+  let auth: ReturnType<typeof makeAuthService>;
+  let ctrl: OidcController;
+  const fetchSpy = vi.fn();
+
+  beforeEach(() => {
+    fetchSpy.mockReset();
+    jwtVerifyMock.mockReset();
+    vi.stubGlobal('fetch', fetchSpy);
+    store = makeStateStore();
+    reply = makeReply();
+    auth = makeAuthService();
+    ctrl = new OidcController(makeConfig(), makeDiscovery(), store, auth);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("rejette quand l'IdP renvoie `error` (ex: user a refusé le consent)", async () => {
+    await expect(
+      ctrl.callback(undefined, undefined, 'access_denied', 'user said no', FAKE_REQ, reply),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(store.consume).not.toHaveBeenCalled();
+    expect(auth.signinWithOidc).not.toHaveBeenCalled();
+  });
+
+  it('rejette en 400 quand code est absent', async () => {
+    await expect(
+      ctrl.callback(undefined, 'state-x', undefined, undefined, FAKE_REQ, reply),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejette en 400 quand state est absent', async () => {
+    await expect(
+      ctrl.callback('code-x', undefined, undefined, undefined, FAKE_REQ, reply),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejette quand state.consume renvoie null (CSRF / replay / expiré)', async () => {
+    store.consume = vi.fn().mockResolvedValue(null);
+    await expect(
+      ctrl.callback('code-x', 'state-unknown', undefined, undefined, FAKE_REQ, reply),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(fetchSpy).not.toHaveBeenCalled(); // pas d'échange code si state KO
+  });
+
+  it("rejette quand l'ID token n'a pas de claim email", async () => {
+    store.consume = vi.fn().mockResolvedValue(makeStoredState());
+    fetchSpy.mockResolvedValue(
+      new Response(
+        JSON.stringify({ access_token: 'kc-AT', id_token: 'kc-IDT', token_type: 'Bearer' }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    jwtVerifyMock.mockResolvedValue({
+      payload: { sub: 'kc-sub-1', nonce: 'nonce-abc' /* pas d'email */ },
+    });
+
+    await expect(
+      ctrl.callback('code-x', 'state-ok', undefined, undefined, FAKE_REQ, reply),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(auth.signinWithOidc).not.toHaveBeenCalled();
+  });
+
+  it('rejette `email_verified=false` (anti-hijack par email non vérifié)', async () => {
+    store.consume = vi.fn().mockResolvedValue(makeStoredState());
+    fetchSpy.mockResolvedValue(
+      new Response(
+        JSON.stringify({ access_token: 'kc-AT', id_token: 'kc-IDT', token_type: 'Bearer' }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    jwtVerifyMock.mockResolvedValue({
+      payload: {
+        sub: 'kc-sub-1',
+        email: 'victim@example.test',
+        email_verified: false,
+        nonce: 'nonce-abc',
+      },
+    });
+
+    await expect(
+      ctrl.callback('code-x', 'state-ok', undefined, undefined, FAKE_REQ, reply),
+    ).rejects.toThrow(/non vérifié/);
+    expect(auth.signinWithOidc).not.toHaveBeenCalled();
+  });
+
+  it("rejette quand l'échange code → tokens échoue", async () => {
+    store.consume = vi.fn().mockResolvedValue(makeStoredState());
+    fetchSpy.mockResolvedValue(new Response('invalid grant', { status: 400 }));
+
+    await expect(
+      ctrl.callback('bad-code', 'state-ok', undefined, undefined, FAKE_REQ, reply),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(jwtVerifyMock).not.toHaveBeenCalled();
+    expect(auth.signinWithOidc).not.toHaveBeenCalled();
+  });
+});
+
+describe('OidcController.callback — happy path', () => {
+  let store: ReturnType<typeof makeStateStore>;
+  let reply: ReturnType<typeof makeReply>;
+  let auth: ReturnType<typeof makeAuthService>;
+  let ctrl: OidcController;
+  const fetchSpy = vi.fn();
+
+  beforeEach(() => {
+    fetchSpy.mockReset();
+    jwtVerifyMock.mockReset();
+    vi.stubGlobal('fetch', fetchSpy);
+    store = makeStateStore();
+    reply = makeReply();
+    auth = makeAuthService();
+    ctrl = new OidcController(makeConfig(), makeDiscovery(), store, auth);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('appelle signinWithOidc et redirige avec tokens en fragment', async () => {
+    store.consume = vi.fn().mockResolvedValue(makeStoredState());
+    fetchSpy.mockResolvedValue(
+      new Response(
+        JSON.stringify({ access_token: 'kc-AT', id_token: 'kc-IDT', token_type: 'Bearer' }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    jwtVerifyMock.mockResolvedValue({
+      payload: {
+        sub: 'kc-sub-alice',
+        email: 'alice@example.test',
+        email_verified: true,
+        nonce: 'nonce-abc',
+      },
+    });
+
+    await ctrl.callback('code-x', 'state-ok', undefined, undefined, FAKE_REQ, reply);
+
+    expect(auth.signinWithOidc).toHaveBeenCalledWith(
+      { provider: 'oidc', subject: 'kc-sub-alice', email: 'alice@example.test' },
+      { userAgent: 'rt-test', ip: '127.0.0.1' },
+    );
+    expect(reply.redirect).toHaveBeenCalledTimes(1);
+    const [target, status] = reply.redirect.mock.calls[0]!;
+    expect(status).toBe(302);
+
+    const parsed = new URL(String(target));
+    expect(`${parsed.origin}${parsed.pathname}`).toBe(POST_LOGIN);
+    // Tokens en fragment (#), JAMAIS en query (#access_token=…&refresh_token=…).
+    expect(parsed.hash).toMatch(/^#/);
+    expect(parsed.search).toBe('');
+    const frag = new URLSearchParams(parsed.hash.slice(1));
+    expect(frag.get('access_token')).toBe('AT.signed.jwt');
+    expect(frag.get('refresh_token')).toBe('RT.opaque');
+    expect(Number(frag.get('expires_in'))).toBeGreaterThan(0);
   });
 });
