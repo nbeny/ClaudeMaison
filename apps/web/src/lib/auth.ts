@@ -1,7 +1,7 @@
-import NextAuth from 'next-auth';
+import NextAuth, { type NextAuthResult } from 'next-auth';
 import Keycloak from 'next-auth/providers/keycloak';
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const nextAuth: NextAuthResult = NextAuth({
   providers: [
     Keycloak({
       clientId: process.env.KEYCLOAK_CLIENT_ID!,
@@ -20,3 +20,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
+
+export const handlers: NextAuthResult['handlers'] = nextAuth.handlers;
+export const auth: NextAuthResult['auth'] = nextAuth.auth;
+export const signIn: NextAuthResult['signIn'] = nextAuth.signIn;
+export const signOut: NextAuthResult['signOut'] = nextAuth.signOut;
